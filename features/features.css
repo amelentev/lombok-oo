@@ -1,0 +1,120 @@
+body {
+	font-family: Verdana;
+	background-image: url(gradient.png);
+	background-repeat: repeat-x;
+	background-attachment: fixed;
+}
+
+#pepper {
+	background-image: url(lombok-background.png);
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	background-position: 50px 20px;
+}
+
+.meat {
+	padding: 0px 48px;
+}
+
+.meat .header {
+	position: absolute;
+	top: 10px;
+	left: 30px;
+}
+
+.meat .minimumHeight {
+	height: 700px;
+	width: 5px;
+	float: right;
+}
+
+h1 {
+	width: 100%;
+	text-align: center;
+}
+
+.index {
+	font-size: 1.2em;
+	margin: 64px 0px 32px 64px;
+}
+
+.index dt {
+	margin-top: 8px;
+	font-size: 1.2em;
+}
+
+.index dd {
+	margin-left: 32px;
+}
+
+.overview code {
+	font-size: 1.1em;
+}
+
+.smallprint {
+	font-size: 0.8em;
+	color: #444;
+}
+
+.smallprint code {
+	font-size: 1em;
+}
+
+.snippets {
+	margin-top: 32px;
+}
+
+.snippets .pre {
+	white-space: pre;
+	float: left;
+	width: 45%;
+}
+
+.snippet {
+	overflow: auto;
+	padding: 4px;
+	border: 1px dotted #888;
+}
+
+.snippets .sep {
+	display: block;
+	width: 5%;
+	height: 1px;
+	float: left;
+}
+
+.snippets .post {
+	white-space: pre;
+	float: left;
+	width: 45%;
+}
+
+.snippets .end {
+	clear: both;
+}
+
+.snippet code {
+	font-size: 14px;
+}
+
+.snippet br {
+	display: none;
+}
+
+footer {
+	clear: left;
+	margin: 0 auto 0 auto;
+	padding: 16px 0 16px 0;
+	display: block;
+	text-align: center;
+}
+
+footer .disabled {
+	color: #aaa;
+}
+
+footer .copyright {
+	color: #555;
+	font-size: 11px;
+	font-style: italic;
+}
