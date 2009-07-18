@@ -133,7 +133,9 @@ Thrown on the fly if an actual annotation instance procured via the <A HREF="../
 <TD><CODE><B><A HREF="../../lombok/core/AnnotationValues.AnnotationValueDecodeFail.html#idx">idx</A></B></CODE>
 
 <BR>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The index into an array initializer (e.g.</TD>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The index into an array initializer (e.g. if the second value in an array initializer is
+ an integer constant expression like '5+SomeOtherClass.CONSTANT', this exception will be thrown,
+ and you'll get a '1' for idx.</TD>
 </TR>
 <TR BGCOLOR="white" CLASS="TableRowColor">
 <TD ALIGN="right" VALIGN="top" WIDTH="1%"><FONT SIZE="-1">

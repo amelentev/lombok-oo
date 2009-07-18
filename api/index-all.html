@@ -686,7 +686,9 @@ Constructor for class lombok.javac.handlers.<A HREF="./lombok/javac/handlers/Han
 <DL>
 <DT><A HREF="./lombok/core/AnnotationValues.AnnotationValueDecodeFail.html#idx"><B>idx</B></A> - 
 Variable in exception lombok.core.<A HREF="./lombok/core/AnnotationValues.AnnotationValueDecodeFail.html" title="class in lombok.core">AnnotationValues.AnnotationValueDecodeFail</A>
-<DD>The index into an array initializer (e.g.
+<DD>The index into an array initializer (e.g. if the second value in an array initializer is
+ an integer constant expression like '5+SomeOtherClass.CONSTANT', this exception will be thrown,
+ and you'll get a '1' for idx.
 <DT><A HREF="./lombok/javac/apt/Processor.html#init(javax.annotation.processing.ProcessingEnvironment)"><B>init(ProcessingEnvironment)</B></A> - 
 Method in class lombok.javac.apt.<A HREF="./lombok/javac/apt/Processor.html" title="class in lombok.javac.apt">Processor</A>
 <DD>
