@@ -2,6 +2,7 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="src_eclipseagent"/>
+	<classpathentry kind="src" path="src_disableCheckedExceptions"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="lib/eclipse.agent/asm-3.1.jar"/>
 	<classpathentry kind="lib" path="deps/lombok/org.eclipse.jdt.apt.core_3.3.200.v20090528-1135.jar"/>
@@ -18,5 +19,6 @@
 	<classpathentry kind="lib" path="deps/lombok/org.eclipse.equinox.common_3.5.0.v20090520-1800.jar"/>
 	<classpathentry kind="lib" path="deps/lombok/spi-0.2.3-pre.jar"/>
 	<classpathentry kind="lib" path="deps/tools.jar"/>
+	<classpathentry kind="lib" path="lib/disableCheckedExceptions/jna.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

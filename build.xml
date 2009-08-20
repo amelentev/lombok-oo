@@ -50,6 +50,12 @@
 		</fileset>
 	</path>
 	
+	<path id="disableCheckedExceptions.libs.path">
+		<fileset dir="lib/disableCheckedExceptions">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+	
 	<target name="clean" description="Removes all generated files">
 		<delete dir="build" quiet="true" />
 		<delete dir="dist" quiet="true" />
@@ -164,6 +170,30 @@
 				</replacetokens>
 			</filterchain>
 		</copy>
+	</target>
+	
+	<target name="compile_disableCheckedExceptions" description="Compiles the disable checked exceptions side-project">
+		<mkdir dir="build/disableCheckedExceptions" />
+		<javac srcdir="src_disableCheckedExceptions" debug="on" destdir="build/disableCheckedExceptions" target="1.6">
+			<classpath refid="disableCheckedExceptions.libs.path" />
+		</javac>
+	</target>
+	
+	<target name="dist_disableCheckedExceptions" description="Creates the disable checked exceptions jar" depends="compile_disableCheckedExceptions">
+		<unjar dest="build/disableCheckedExceptions">
+			<path refid="disableCheckedExceptions.libs.path" />
+		</unjar>
+		<mkdir dir="build/disableCheckedExceptions/META-INF" />
+		<mkdir dir="build/disableCheckedExceptions/META-INF/services" />
+		<echo file="build/disableCheckedExceptions/META-INF/services/javax.annotation.processing.Processor">lombok.javac.disableCheckedExceptions.DynamicAgent</echo>
+		<jar destfile="dist/disableCheckedExceptions-alpha.jar">
+			<fileset dir="build/disableCheckedExceptions" />
+			<manifest>
+				<attribute name="Agent-Class" value="lombok.javac.disableCheckedExceptions.DynamicAgent" />
+				<attribute name="Can-Redefine-Classes" value="true" />
+				<attribute name="Can-Retransform-Classes" value="true" />
+			</manifest>
+		</jar>
 	</target>
 	
 	<target name="compile" description="Compiles the code">
