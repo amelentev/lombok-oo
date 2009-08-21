@@ -43,11 +43,6 @@ public class DynamicAgent extends AbstractProcessor {
 	}
 	
 	public static void agentmain(String agentargs, Instrumentation instrumentation) throws Exception {
-		Class<?> c = instrumentation.getClass();
-		while ( c != Object.class ) {
-			c = c.getSuperclass();
-		}
-		
 		instrumentation.addTransformer(new CheckForThrownExceptionTransformer(), true);
 		instrumentation.retransformClasses(Class.forName("com.sun.tools.javac.comp.Check"));
 	}
