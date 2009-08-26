@@ -28,8 +28,6 @@ import com.sun.jna.ptr.PointerByReference;
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class DynamicAgent extends AbstractProcessor {
 	@Override public void init(ProcessingEnvironment processingEnv) {
-		super.init(processingEnv);
-		
 		try {
 			loadYourself(processingEnv.getMessager());
 		} catch ( Exception e ) {
