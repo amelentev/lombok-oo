@@ -25,6 +25,7 @@ import static lombok.eclipse.Eclipse.*;
 import static lombok.eclipse.handlers.PKG.*;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Data.NoGetter;
 import lombok.core.AnnotationValues;
 import lombok.core.TransformationsUtil;
 import lombok.core.AST.Kind;
@@ -62,14 +63,22 @@ public class HandleGetter implements EclipseAnnotationHandler<Getter> {
 	 * be a warning if its already there. The default access level is used.
 	 */
 	public void generateGetterForField(Node fieldNode, ASTNode pos) {
+		boolean hasGetterAnnotation = false, hasNoGetterAnnotation = false;
+		
 		for ( Node child : fieldNode.down() ) {
 			if ( child.getKind() == Kind.ANNOTATION ) {
 				if ( annotationTypeMatches(Getter.class, child) ) {
 					//The annotation will make it happen, so we can skip it.
-					return;
+					hasGetterAnnotation = true;
+				}
+				
+				if ( annotationTypeMatches(NoGetter.class, child) ) {
+					hasNoGetterAnnotation = true;
 				}
 			}
 		}
+		
+		if ( hasGetterAnnotation || hasNoGetterAnnotation ) return;
 		
 		createGetterForField(AccessLevel.PUBLIC, fieldNode, fieldNode, pos, false);
 	}

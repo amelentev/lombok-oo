@@ -46,6 +46,40 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 public @interface Data {
 	/**
+	 * The <code>@Data</code> annotation generates getters and setters for every non-static field in your class.
+	 * If you'd like to suppress the generation of the getter, you can annotate the field with <code>@NoGetter</code>.
+	 * <p>
+	 * Setting this annotation without an accompanying <code>@Data</code> annotation is an error. Setting this annotation
+	 * when there's also a <code>@Getter</code> annotation is also an error.
+	 * 
+	 * @see Data.NoSetter
+	 */
+	@Target(ElementType.FIELD)
+	@Retention(RetentionPolicy.SOURCE)
+	public @interface NoGetter {}
+	
+	/**
+	 * The <code>@Data</code> annotation generates getters and setters for every non-static field in your class.
+	 * If you'd like to suppress the generation of the setter, you can annotate the field with <code>@NoSetter</code>.
+	 * <p>
+	 * Setting this annotation without an accompanying <code>@Data</code> annotation is an error. Setting this annotation
+	 * when there's also a <code>@Setter</code> annotation is also an error.
+	 * 
+	 * @see Data.NoGetter
+	 */
+	@Target(ElementType.FIELD)
+	@Retention(RetentionPolicy.SOURCE)
+	public @interface NoSetter {}
+	
+	/**
+	 * Setting this variable is equal to adding <code>@ToString</code> and <code>@EqualsAndHashCode</code> annotations and setting
+	 * the <code>callSuper</code> variable on them.
+	 * 
+	 * Setting both in conflict.
+	 */
+	boolean callSuper() default false;
+	
+	/**
 	 * If you specify a static constructor name, then the generated constructor will be private, and
 	 * instead a static factory method is created that other classes can use to create instances.
 	 * We suggest the name: "of", like so:
