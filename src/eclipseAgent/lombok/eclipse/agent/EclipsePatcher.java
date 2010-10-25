@@ -57,6 +57,7 @@ public class EclipsePatcher extends Agent {
 		}
 		
 		patchAvoidReparsingGeneratedCode(sm);
+		OperatorOverloading.patch(sm);
 		
 		if (!ecjOnly) {
 			patchLombokizeAST(sm);
