@@ -4,10 +4,11 @@ Operator Overloading:
  branch operatorOverloading
 
  Implementation of (Scala-like) Operator Overloading for Java language.
- Works on javac and Eclipse IDE.
+ Works with javac and Eclipse IDE.
  Works partially with Netbeans on maven based projects.
 
  Example (./usage_examples/OperatorOverload_post.jpage):
+
 	import java.math.BigInteger;
 	public class Test {
 		public static void main(String[] args) {
@@ -16,7 +17,9 @@ Operator Overloading:
 			System.out.println(c);
 		}
 	}
- Here `a+b` will be transformed to `a.add(b.multiply(a))` by lombok.
+
+ Here `a+b*a` will be transformed to `a.add(b.multiply(a))`.
+
  Map operator to method:
 	"+" - "add",
 	"-" - "subtract",
@@ -33,6 +36,7 @@ Operator Overloading:
 Methods inlining:
  branch inline
  outdated
+
 
 Original README:
 
