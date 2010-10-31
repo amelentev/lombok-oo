@@ -173,6 +173,7 @@ public class Processor extends AbstractProcessor {
 		}
 		
 		transformer.transform(processingEnv.getContext(), units.keySet());
+		OperatorOverloading.inject(processingEnv);
 		
 		return false;
 	}
