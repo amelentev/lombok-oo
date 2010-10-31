@@ -1,3 +1,41 @@
+This is fork of projectlombok for experiments.
+
+Operator Overloading:
+ branch operatorOverloading
+
+ Implementation of (Scala-like) Operator Overloading for Java language.
+ Works on javac and Eclipse IDE.
+ Works partially with Netbeans on maven based projects.
+
+ Example (./usage_examples/OperatorOverload_post.jpage):
+	import java.math.BigInteger;
+	public class Test {
+		public static void main(String[] args) {
+			BigInteger  a = BigInteger.valueOf(1), b = BigInteger.valueOf(2),
+						c = a + b*a;
+			System.out.println(c);
+		}
+	}
+ Here `a+b` will be transformed to `a.add(b.multiply(a))` by lombok.
+ Map operator to method:
+	"+" - "add",
+	"-" - "subtract",
+	"*" - "multiply",
+	"/" - "divide",
+	"%" - "remainder",
+	"&" - "and",
+	"|" - "or",
+	"^" - "xor",
+	"<<" - "shiftLeft",
+	">>" - "shiftRight"
+
+
+Methods inlining:
+ branch inline
+ outdated
+
+Original README:
+
 projectlombok makes java a spicier language by adding 'handlers' that know how to build and compile simple, boilerplate-free, not-quite-java code.
 See LICENSE for the project lombok license.
 
