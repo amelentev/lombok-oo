@@ -93,6 +93,9 @@ public class OperatorOverloading {
 	@SuppressWarnings("unchecked")
 	/** add class claz to outClassLoader */
 	static <T> Class<T> reloadClass(String claz, ClassLoader outClassLoader) throws Exception {
+		try { // already loaded?
+			return (Class<T>) outClassLoader.loadClass(claz);
+		} catch (ClassNotFoundException e) {}
 		String path = claz.replace('.', '/') + ".class";
 		ClassLoader incl = OperatorOverloading.class.getClassLoader();
 		InputStream is = incl.getResourceAsStream(path);
