@@ -3,7 +3,22 @@ import java.math.BigInteger;
 public class OperatorOverload {
 	public static void main(String[] args) {
 		BigInteger  a = BigInteger.valueOf(1), b = BigInteger.valueOf(2),
-					c = a + b*a;
+					c = a + b * a;
 		System.out.println(c);
+		Test ta = new Test(1), tb = new Test(2),
+			tc = ta + tb * ta;
+		System.out.println(tc.a);
+	}
+	static class Test {
+		int a;
+		Test(int a) {
+			this.a = a;
+		}
+		Test add(Test o) {
+			return new Test(a + o.a);
+		}
+		Test multiply(Test o) {
+			return new Test(a * o.a);
+		}
 	}
 }
