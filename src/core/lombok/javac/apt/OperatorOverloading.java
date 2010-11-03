@@ -10,6 +10,7 @@ import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskEvent.Kind;
 import com.sun.source.util.TaskListener;
 import com.sun.tools.javac.comp.Attr;
+import com.sun.tools.javac.comp.Lower;
 import com.sun.tools.javac.comp.OOLower;
 import com.sun.tools.javac.comp.Resolve;
 import com.sun.tools.javac.main.JavaCompiler;
@@ -68,11 +69,13 @@ public class OperatorOverloading {
 			f.setAccessible(true);
 			Context context = (com.sun.tools.javac.util.Context) f.get(compiler);
 
-			// hack: load OOResolve to the same classloader as Resolve so OOResolve will be able to use and override default accessor members
+			// hack: load OOResolve&OOLower to the same classloader as Resolve&Lower so they will be able to use and override default accessor members
 			Class<?> resolveClass = reloadClass("com.sun.tools.javac.comp.OOResolve", Resolve.class.getClassLoader());
+			Class<?> lowerClass = reloadClass("com.sun.tools.javac.comp.OOLower", Lower.class.getClassLoader());
 			//OOResolve resolve = OOResolve.hook(context);
 			Object resolve = resolveClass.getDeclaredMethod("hook", Context.class).invoke(null, context);
-			OOLower lower = OOLower.hook(context);
+			//OOLower lower = OOLower.hook(context);
+			Object lower = lowerClass.getDeclaredMethod("hook", Context.class).invoke(null, context);
 
 			f = JavaCompiler.class.getDeclaredField("attr");
 			f.setAccessible(true);
