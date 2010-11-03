@@ -7,7 +7,7 @@ Operator Overloading:
  Works with javac and Eclipse IDE.
  Works partially with Netbeans on maven based projects.
 
- Example (./usage_examples/OperatorOverload_post.jpage):
+ Example (See also: ./usage_examples/OperatorOverload_post.jpage):
 
 	import java.math.BigInteger;
 	public class Test {
@@ -21,16 +21,24 @@ Operator Overloading:
  Here `a+b*a` will be transformed to `a.add(b.multiply(a))`.
 
  Map operator to method:
-	"+" - "add",
-	"-" - "subtract",
-	"*" - "multiply",
-	"/" - "divide",
-	"%" - "remainder",
-	"&" - "and",
-	"|" - "or",
-	"^" - "xor",
-	"<<" - "shiftLeft",
-	">>" - "shiftRight"
+	binary:
+		"+" - "add",
+		"-" - "subtract",
+		"*" - "multiply",
+		"/" - "divide",
+		"%" - "remainder",
+		"&" - "and",
+		"|" - "or",
+		"^" - "xor",
+		"<<" - "shiftLeft",
+		">>" - "shiftRight"
+	unary:
+		"-" - "negate"
+		"~" - "not"
+	compare:
+		"<","<=",">",">=" - "compareTo"
+ These methods exists in many java classes (ex:BigInteger) so you can
+ use operators on them "out of the box".
 
 
 Methods inlining:
