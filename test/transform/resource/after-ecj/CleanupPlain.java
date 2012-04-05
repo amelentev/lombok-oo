@@ -18,7 +18,7 @@ class CleanupPlain {
           }
         finally
           {
-            if ((out != null))
+            if ((java.util.Collections.singletonList(out).get(0) != null))
                 {
                   out.close();
                 }
@@ -26,7 +26,7 @@ class CleanupPlain {
       }
     finally
       {
-        if ((in != null))
+        if ((java.util.Collections.singletonList(in).get(0) != null))
             {
               in.close();
             }

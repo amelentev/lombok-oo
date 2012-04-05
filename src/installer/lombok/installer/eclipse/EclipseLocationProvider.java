@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -89,10 +89,10 @@ public class EclipseLocationProvider implements IdeLocationProvider {
 			if (p.getName().equalsIgnoreCase(getIniName())) {
 				return new EclipseLocation(canonical(p.getParentFile()), p);
 			}
-			
-			if (getEclipseExecutableNames().contains(p.getName().toLowerCase())) {
-				return findEclipseIniFromExe(p, 0);
-			}
+		}
+		
+		if (getEclipseExecutableNames().contains(p.getName().toLowerCase())) {
+			return findEclipseIniFromExe(p, 0);
 		}
 		
 		return null;

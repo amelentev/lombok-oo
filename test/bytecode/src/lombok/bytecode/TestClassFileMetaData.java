@@ -1,5 +1,5 @@
 /*
- * Copyright © 2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -169,6 +169,7 @@ public class TestClassFileMetaData {
 	@Test
 	public void testContainsLong() {
 		assertTrue(foo.containsLong(123));
+		assertTrue(foo.containsLong(0x1FFFFFFFFL));
 		
 		assertFalse(foo.containsLong(1));
 		assertFalse(buux.containsLong(1));

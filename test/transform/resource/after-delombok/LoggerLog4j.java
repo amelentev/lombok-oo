@@ -1,5 +1,7 @@
-import org.apache.log4j.Logger;
-
 class LoggerLog4j {
-	private static final Logger log = Logger.getLogger(LoggerLog4j.class);
+	private static final org.apache.log4j.Logger log = org.apache.log4j.Logger.getLogger(LoggerLog4j.class);
+}
+
+class LoggerLog4jWithImport {
+	private static final org.apache.log4j.Logger log = org.apache.log4j.Logger.getLogger(LoggerLog4jWithImport.class);
 }

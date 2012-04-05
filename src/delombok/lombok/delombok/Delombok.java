@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,22 +41,16 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 
-import javax.annotation.processing.Messager;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.element.Element;
 import javax.tools.DiagnosticListener;
 import javax.tools.JavaFileObject;
-import javax.tools.Diagnostic.Kind;
 
-import lombok.javac.DeleteLombokAnnotations;
-import lombok.javac.JavacTransformer;
+import lombok.javac.CommentCatcher;
+import lombok.javac.LombokOptions;
 
 import com.sun.tools.javac.main.JavaCompiler;
 import com.sun.tools.javac.main.OptionName;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.util.Context;
-import com.sun.tools.javac.util.Options;
 import com.zwitserloot.cmdreader.CmdReader;
 import com.zwitserloot.cmdreader.Description;
 import com.zwitserloot.cmdreader.Excludes;
@@ -75,7 +69,7 @@ public class Delombok {
 	}
 	
 	public Delombok() {
-		context.put(DeleteLombokAnnotations.class, new DeleteLombokAnnotations(true));
+//		context.put(DeleteLombokAnnotations.class, new DeleteLombokAnnotations(true));
 	}
 	
 	private PrintStream feedback = System.err;
@@ -180,9 +174,9 @@ public class Delombok {
 		if (args.classpath != null) delombok.setClasspath(args.classpath);
 		if (args.sourcepath != null) delombok.setSourcepath(args.sourcepath);
 		
-		for (String in : args.input) {
-			try {
-				File f = new File(in);
+		try {
+			for (String in : args.input) {
+				File f = new File(in).getAbsoluteFile();
 				if (f.isFile()) {
 					delombok.addFile(f.getParentFile(), f.getName());
 				} else if (f.isDirectory()) {
@@ -192,24 +186,27 @@ public class Delombok {
 				} else {
 					if (!args.quiet) System.err.println("WARNING: not a standard file or directory - skipping: " + f);
 				}
-				
-				delombok.delombok();
-			} catch (Exception e) {
-				if (!args.quiet) {
-					String msg = e.getMessage();
-					if (msg != null && msg.startsWith("DELOMBOK: ")) System.err.println(msg.substring("DELOMBOK: ".length()));
-					else {
-						e.printStackTrace();
-					}
-					System.exit(1);
-					return;
+			}
+			
+			delombok.delombok();
+		} catch (Exception e) {
+			if (!args.quiet) {
+				String msg = e.getMessage();
+				if (msg != null && msg.startsWith("DELOMBOK: ")) System.err.println(msg.substring("DELOMBOK: ".length()));
+				else {
+					e.printStackTrace();
 				}
+				System.exit(1);
+				return;
 			}
 		}
 	}
 	
 	public void setCharset(String charsetName) throws UnsupportedCharsetException {
-		
+		if (charsetName == null) {
+			charset = Charset.defaultCharset();
+			return;
+		}
 		charset = Charset.forName(charsetName);
 	}
 	
@@ -336,7 +333,7 @@ public class Delombok {
 			in.close();
 		}
 	}
-
+	
 	public void addFile(File base, String fileName) throws IOException {
 		if (output != null && canonical(base).equals(canonical(output))) throw new IOException(
 				"DELOMBOK: Output file and input file refer to the same filesystem location. Specify a separate path for output.");
@@ -354,37 +351,38 @@ public class Delombok {
 	}
 	
 	public boolean delombok() throws IOException {
-		Options options = Options.instance(context);
+		LombokOptions options = LombokOptions.replaceWithDelombokOptions(context);
 		options.put(OptionName.ENCODING, charset.name());
 		if (classpath != null) options.put(OptionName.CLASSPATH, classpath);
 		if (sourcepath != null) options.put(OptionName.SOURCEPATH, sourcepath);
-		CommentCollectingScanner.Factory.preRegister(context);
+		options.put("compilePolicy", "attr");
 		
-		JavaCompiler compiler = new JavaCompiler(context);
-		compiler.keepComments = true;
-		compiler.genEndPos = true;
+		CommentCatcher catcher = CommentCatcher.create(context);
+		JavaCompiler compiler = catcher.getCompiler();
 		
 		List<JCCompilationUnit> roots = new ArrayList<JCCompilationUnit>();
-		Map<JCCompilationUnit, Comments> commentsMap = new IdentityHashMap<JCCompilationUnit, Comments>();
 		Map<JCCompilationUnit, File> baseMap = new IdentityHashMap<JCCompilationUnit, File>();
+		
+		
+		compiler.initProcessAnnotations(Collections.singleton(new lombok.javac.apt.Processor()));
+		
 		for (File fileToParse : filesToParse) {
-			Comments comments = new Comments();
-			context.put(Comments.class, comments);
 			
 			@SuppressWarnings("deprecation")
 			JCCompilationUnit unit = compiler.parse(fileToParse.getAbsolutePath());
 			
-			commentsMap.put(unit, comments);
 			baseMap.put(unit, fileToBase.get(fileToParse));
 			roots.add(unit);
 		}
 		
-		if (compiler.errorCount() > 0) return false;
-		compiler.enterTrees(toJavacList(roots));
+		if (compiler.errorCount() > 0) {
+			// At least one parse error. No point continuing (a real javac run doesn't either).
+			return false;
+		}
 		
+		JavaCompiler delegate = compiler.processAnnotations(compiler.enterTrees(toJavacList(roots)));
 		for (JCCompilationUnit unit : roots) {
-			boolean changed = new JavacTransformer(messager).transform(context, Collections.singleton(unit));
-			DelombokResult result = new DelombokResult(commentsMap.get(unit).comments, unit, force || changed);
+			DelombokResult result = new DelombokResult(catcher.getComments(unit), unit, force || options.isChanged(unit));
 			if (verbose) feedback.printf("File: %s [%s]\n", unit.sourcefile.getName(), result.isChanged() ? "delomboked" : "unchanged");
 			Writer rawWriter;
 			if (presetWriter != null) rawWriter = presetWriter;
@@ -394,38 +392,17 @@ public class Delombok {
 			try {
 				result.print(writer);
 			} finally {
-				writer.close();
+				if (output != null) {
+					writer.close();
+				} else {
+					writer.flush();
+				}
 			}
 		}
+		delegate.close();
 		
 		return true;
 	}
-	
-	public static class Comments {
-		public com.sun.tools.javac.util.List<Comment> comments = com.sun.tools.javac.util.List.nil();
-		
-		void add(Comment comment) {
-			comments = comments.append(comment);
-		}
-	}
-	
-	private static final Messager messager = new Messager() {
-		@Override public void printMessage(Kind kind, CharSequence msg) {
-			System.out.printf("%s: %s\n", kind, msg);
-		}
-		
-		@Override public void printMessage(Kind kind, CharSequence msg, Element e) {
-			System.out.printf("%s: %s\n", kind, msg);
-		}
-		
-		@Override public void printMessage(Kind kind, CharSequence msg, Element e, AnnotationMirror a) {
-			System.out.printf("%s: %s\n", kind, msg);
-		}
-		
-		@Override public void printMessage(Kind kind, CharSequence msg, Element e, AnnotationMirror a, AnnotationValue v) {
-			System.out.printf("%s: %s\n", kind, msg);
-		}
-	};
 	
 	private static String canonical(File dir) {
 		try {
@@ -442,7 +419,8 @@ public class Delombok {
 	}
 	
 	private Writer createFileWriter(File outBase, File inBase, URI file) throws IOException {
-		URI relative = inBase.toURI().relativize(file);
+		URI base = inBase.toURI();
+		URI relative = base.relativize(base.resolve(file));
 		File outFile;
 		if (relative.isAbsolute()) {
 			outFile = new File(outBase, new File(relative).getName());

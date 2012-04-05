@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@ import org.mangosdk.spi.ProviderFor;
 import lombok.Lombok;
 import lombok.core.AnnotationValues;
 import lombok.core.PrintAST;
+import lombok.eclipse.DeferUntilPostDiet;
 import lombok.eclipse.EclipseASTVisitor;
 import lombok.eclipse.EclipseAnnotationHandler;
 import lombok.eclipse.EclipseNode;
@@ -39,10 +40,9 @@ import lombok.eclipse.EclipseNode;
  * Handles the {@code lombok.core.PrintAST} annotation for eclipse.
  */
 @ProviderFor(EclipseAnnotationHandler.class)
-public class HandlePrintAST implements EclipseAnnotationHandler<PrintAST> {
-	public boolean handle(AnnotationValues<PrintAST> annotation, Annotation ast, EclipseNode annotationNode) {
-		if (!annotationNode.isCompleteParse()) return false;
-		
+@DeferUntilPostDiet
+public class HandlePrintAST extends EclipseAnnotationHandler<PrintAST> {
+	public void handle(AnnotationValues<PrintAST> annotation, Annotation ast, EclipseNode annotationNode) {
 		PrintStream stream = System.out;
 		String fileName = annotation.getInstance().outfile();
 		if (fileName.length() > 0) try {
@@ -52,6 +52,5 @@ public class HandlePrintAST implements EclipseAnnotationHandler<PrintAST> {
 		}
 		
 		annotationNode.up().traverse(new EclipseASTVisitor.Printer(annotation.getInstance().printContent(), stream));
-		return true;
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -126,7 +126,7 @@ public abstract class IdeFinder {
 		String prop = System.getProperty("os.name", "").toLowerCase();
 		if (prop.matches("^.*\\bmac\\b.*$")) return OS.MAC_OS_X;
 		if (prop.matches("^.*\\bdarwin\\b.*$")) return OS.MAC_OS_X;
-		if (prop.matches("^.*\\bwin(dows)\\b.*$")) return OS.WINDOWS;
+		if (prop.matches("^.*\\bwin(dows|32|64)?\\b.*$")) return OS.WINDOWS;
 		
 		return OS.UNIX;
 	}

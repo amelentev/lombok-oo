@@ -1,3 +1,5 @@
+import lombok.val;
+
 public class ValLessSimple {
 	private short field2 = 5;
 	
@@ -24,6 +26,14 @@ public class ValLessSimple {
 		{
 			val methodV = method();
 			val foo = fieldV + methodV;
+		}
+	}
+	
+	private void testValInCatchBlock() {
+		try {
+			val x = 1 / 0;
+		} catch (ArithmeticException e) {
+			val y = 0;
 		}
 	}
 	

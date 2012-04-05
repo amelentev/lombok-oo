@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,7 +38,7 @@ import com.sun.tools.javac.tree.JCTree.JCAnnotation;
  * 
  * You also need to register yourself via SPI discovery as being an implementation of {@code JavacAnnotationHandler}.
  */
-public interface JavacAnnotationHandler<T extends Annotation> {
+public abstract class JavacAnnotationHandler<T extends Annotation> {
 	/**
 	 * Called when an annotation is found that is likely to match the annotation you're interested in.
 	 * 
@@ -51,8 +51,6 @@ public interface JavacAnnotationHandler<T extends Annotation> {
 	 * @param annotationNode The Lombok AST wrapper around the 'ast' parameter. You can use this object
 	 * to travel back up the chain (something javac AST can't do) to the parent of the annotation, as well
 	 * as access useful methods such as generating warnings or errors focused on the annotation.
-	 * @return {@code true} if you don't want to be called again about this annotation during this
-	 * compile session (you've handled it), or {@code false} to indicate you aren't done yet.
 	 */
-	boolean handle(AnnotationValues<T> annotation, JCAnnotation ast, JavacNode annotationNode);
+	public abstract void handle(AnnotationValues<T> annotation, JCAnnotation ast, JavacNode annotationNode);
 }

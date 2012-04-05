@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,12 +21,13 @@
  */
 package lombok.eclipse.handlers;
 
+import static lombok.eclipse.handlers.EclipseHandlerUtil.*;
+
 import java.util.Arrays;
 
 import lombok.Cleanup;
 import lombok.core.AnnotationValues;
 import lombok.core.AST.Kind;
-import lombok.eclipse.Eclipse;
 import lombok.eclipse.EclipseAnnotationHandler;
 import lombok.eclipse.EclipseNode;
 
@@ -38,6 +39,7 @@ import org.eclipse.jdt.internal.compiler.ast.Block;
 import org.eclipse.jdt.internal.compiler.ast.CaseStatement;
 import org.eclipse.jdt.internal.compiler.ast.CastExpression;
 import org.eclipse.jdt.internal.compiler.ast.EqualExpression;
+import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.IfStatement;
 import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.MemberValuePair;
@@ -54,24 +56,24 @@ import org.mangosdk.spi.ProviderFor;
  * Handles the {@code lombok.Cleanup} annotation for eclipse.
  */
 @ProviderFor(EclipseAnnotationHandler.class)
-public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
-	public boolean handle(AnnotationValues<Cleanup> annotation, Annotation ast, EclipseNode annotationNode) {
+public class HandleCleanup extends EclipseAnnotationHandler<Cleanup> {
+	public void handle(AnnotationValues<Cleanup> annotation, Annotation ast, EclipseNode annotationNode) {
 		String cleanupName = annotation.getInstance().value();
 		if (cleanupName.length() == 0) {
 			annotationNode.addError("cleanupName cannot be the empty string.");
-			return true;
+			return;
 		}
 		
 		if (annotationNode.up().getKind() != Kind.LOCAL) {
 			annotationNode.addError("@Cleanup is legal only on local variable declarations.");
-			return true;
+			return;
 		}
 		
 		LocalDeclaration decl = (LocalDeclaration)annotationNode.up().get();
 		
 		if (decl.initialization == null) {
 			annotationNode.addError("@Cleanup variable declarations need to be initialized.");
-			return true;
+			return;
 		}
 		
 		EclipseNode ancestor = annotationNode.up().directUp();
@@ -90,12 +92,12 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 			statements = ((SwitchStatement)blockNode).statements;
 		} else {
 			annotationNode.addError("@Cleanup is legal only on a local variable declaration inside a block.");
-			return true;
+			return;
 		}
 		
 		if (statements == null) {
 			annotationNode.addError("LOMBOK BUG: Parent block does not contain any statements.");
-			return true;
+			return;
 		}
 		
 		int start = 0;
@@ -105,7 +107,7 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 		
 		if (start == statements.length) {
 			annotationNode.addError("LOMBOK BUG: Can't find this local variable declaration inside its parent.");
-			return true;
+			return;
 		}
 		
 		start++;  //We start with try{} *AFTER* the var declaration.
@@ -123,7 +125,7 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 		//At this point:
 		//  start-1 = Local Declaration marked with @Cleanup
 		//  start = first instruction that needs to be wrapped into a try block
-		//  end = last intruction of the scope -OR- last instruction before the next case label in switch statements.
+		//  end = last instruction of the scope -OR- last instruction before the next case label in switch statements.
 		//  hence:
 		//  [start, end) = statements for the try block.
 		
@@ -139,18 +141,32 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 		doAssignmentCheck(annotationNode, tryBlock, decl.name);
 		
 		TryStatement tryStatement = new TryStatement();
-		Eclipse.setGeneratedBy(tryStatement, ast);
+		setGeneratedBy(tryStatement, ast);
 		tryStatement.tryBlock = new Block(0);
 		tryStatement.tryBlock.statements = tryBlock;
+		setGeneratedBy(tryStatement.tryBlock, ast);
+		
+		// Positions for in-method generated nodes are special
+		int ss = decl.declarationSourceEnd + 1;
+		int se = ss;
+		if (tryBlock.length > 0) {
+			se = tryBlock[tryBlock.length - 1].sourceEnd + 1; //+1 for the closing semicolon. Yes, there could be spaces. Bummer.
+			tryStatement.sourceStart = ss;
+			tryStatement.sourceEnd = se;
+			tryStatement.tryBlock.sourceStart = ss;
+			tryStatement.tryBlock.sourceEnd = se;
+		}
+		
+		
 		newStatements[start] = tryStatement;
 		
 		Statement[] finallyBlock = new Statement[1];
 		MessageSend unsafeClose = new MessageSend();
-		Eclipse.setGeneratedBy(unsafeClose, ast);
+		setGeneratedBy(unsafeClose, ast);
 		unsafeClose.sourceStart = ast.sourceStart;
 		unsafeClose.sourceEnd = ast.sourceEnd;
 		SingleNameReference receiver = new SingleNameReference(decl.name, 0);
-		Eclipse.setGeneratedBy(receiver, ast);
+		setGeneratedBy(receiver, ast);
 		unsafeClose.receiver = receiver;
 		long nameSourcePosition = (long)ast.sourceStart << 32 | ast.sourceEnd;
 		if (ast.memberValuePairs() != null) for (MemberValuePair pair : ast.memberValuePairs()) {
@@ -167,25 +183,32 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 		long p = (long)pS << 32 | pE;
 
 		SingleNameReference varName = new SingleNameReference(decl.name, p);
-		Eclipse.setGeneratedBy(varName, ast);
+		setGeneratedBy(varName, ast);
 		NullLiteral nullLiteral = new NullLiteral(pS, pE);
-		Eclipse.setGeneratedBy(nullLiteral, ast);
-		EqualExpression equalExpression = new EqualExpression(varName, nullLiteral, OperatorIds.NOT_EQUAL);
+		setGeneratedBy(nullLiteral, ast);
+		
+		MessageSend preventNullAnalysis = preventNullAnalysis(ast, varName);
+		
+		EqualExpression equalExpression = new EqualExpression(preventNullAnalysis, nullLiteral, OperatorIds.NOT_EQUAL);
 		equalExpression.sourceStart = pS; equalExpression.sourceEnd = pE;
-		Eclipse.setGeneratedBy(equalExpression, ast);
+		setGeneratedBy(equalExpression, ast);
 		
 		Block closeBlock = new Block(0);
 		closeBlock.statements = new Statement[1];
 		closeBlock.statements[0] = unsafeClose;
-		Eclipse.setGeneratedBy(closeBlock, ast);
+		setGeneratedBy(closeBlock, ast);
 		IfStatement ifStatement = new IfStatement(equalExpression, closeBlock, 0, 0);
-		Eclipse.setGeneratedBy(ifStatement, ast);
-
-		
+		setGeneratedBy(ifStatement, ast);
 		
 		finallyBlock[0] = ifStatement;
 		tryStatement.finallyBlock = new Block(0);
-		Eclipse.setGeneratedBy(tryStatement.finallyBlock, ast);
+		
+		// Positions for in-method generated nodes are special
+		if (!isSwitch) {
+			tryStatement.finallyBlock.sourceStart = blockNode.sourceEnd;
+			tryStatement.finallyBlock.sourceEnd = blockNode.sourceEnd;
+		}
+		setGeneratedBy(tryStatement.finallyBlock, ast);
 		tryStatement.finallyBlock.statements = finallyBlock;
 		
 		tryStatement.catchArguments = null;
@@ -200,8 +223,35 @@ public class HandleCleanup implements EclipseAnnotationHandler<Cleanup> {
 		}
 		
 		ancestor.rebuild();
+	}
+	
+	private MessageSend preventNullAnalysis(Annotation ast, Expression expr) {
+		MessageSend singletonList = new MessageSend();
+		setGeneratedBy(singletonList, ast);
 		
-		return true;
+		int pS = ast.sourceStart, pE = ast.sourceEnd;
+		long p = (long)pS << 32 | pE;
+		
+		singletonList.receiver = createNameReference("java.util.Collections", ast);
+		singletonList.selector = "singletonList".toCharArray();
+		
+		singletonList.arguments = new Expression[] { expr };
+		singletonList.nameSourcePosition = p;
+		singletonList.sourceStart = pS;
+		singletonList.sourceEnd = singletonList.statementEnd = pE;
+		
+		MessageSend preventNullAnalysis = new MessageSend();
+		setGeneratedBy(preventNullAnalysis, ast);
+		
+		preventNullAnalysis.receiver = singletonList;
+		preventNullAnalysis.selector = "get".toCharArray();
+		
+		preventNullAnalysis.arguments = new Expression[] { makeIntLiteral("0".toCharArray(), ast) };
+		preventNullAnalysis.nameSourcePosition = p;
+		preventNullAnalysis.sourceStart = pS;
+		preventNullAnalysis.sourceEnd = singletonList.statementEnd = pE;
+		
+		return preventNullAnalysis;
 	}
 	
 	private void doAssignmentCheck(EclipseNode node, Statement[] tryBlock, char[] varName) {

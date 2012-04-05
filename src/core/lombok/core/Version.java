@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,8 +26,10 @@ package lombok.core;
  */
 public class Version {
 	// ** CAREFUL ** - this class must always compile with 0 dependencies (it must not refer to any other sources or libraries).
-	private static final String VERSION = "0.9.4-EDGE";
-	private static final String RELEASE_NAME = "burrowing whale";
+	// Note: In 'X.Y.Z', if Z is odd, its a snapshot build built from the repository, so many different 0.10.3 versions can exist, for example.
+	// Official builds always end in an even number. (Since 0.10.2).
+	private static final String VERSION = "0.11.0";
+	private static final String RELEASE_NAME = "Burning Emu";
 	
 	private Version() {
 		//Prevent instantiation
@@ -38,7 +40,7 @@ public class Version {
 	 */
 	public static void main(String[] args) {
 		if (args.length > 0) {
-			System.out.printf("Lombok %s", getFullVersion());
+			System.out.printf("Lombok %s\n", getFullVersion());
 		} else {
 			System.out.println(VERSION);
 		}
@@ -63,6 +65,6 @@ public class Version {
 	}
 	
 	public static String getFullVersion() {
-		return String.format("v%s \"%s\"\n", VERSION, RELEASE_NAME);
+		return String.format("v%s \"%s\"", VERSION, RELEASE_NAME);
 	}
 }

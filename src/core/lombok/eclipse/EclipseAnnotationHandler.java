@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@ import lombok.core.AnnotationValues;
  * 
  * You also need to register yourself via SPI discovery as being an implementation of {@code EclipseAnnotationHandler}.
  */
-public interface EclipseAnnotationHandler<T extends java.lang.annotation.Annotation> {
+public abstract class EclipseAnnotationHandler<T extends java.lang.annotation.Annotation> {
 	/**
 	 * Called when an annotation is found that is likely to match the annotation you're interested in.
 	 * 
@@ -47,8 +47,16 @@ public interface EclipseAnnotationHandler<T extends java.lang.annotation.Annotat
 	 * @param annotationNode The Lombok AST wrapper around the 'ast' parameter. You can use this object
 	 * to travel back up the chain (something javac AST can't do) to the parent of the annotation, as well
 	 * as access useful methods such as generating warnings or errors focused on the annotation.
-	 * @return {@code true} if you don't want to be called again about this annotation during this
-	 * compile session (you've handled it), or {@code false} to indicate you aren't done yet.
 	 */
-	boolean handle(AnnotationValues<T> annotation, org.eclipse.jdt.internal.compiler.ast.Annotation ast, EclipseNode annotationNode);
+	public abstract void handle(AnnotationValues<T> annotation, org.eclipse.jdt.internal.compiler.ast.Annotation ast, EclipseNode annotationNode);
+	
+	/**
+	 * Called when you want to defer until post diet, and we're still in pre-diet. May be called not at all or multiple times, so make sure
+	 * this method is idempotent if run more than once, and whatever you do here should also be done in the main 'handle' method.
+	 * 
+	 * NB: This method exists because in certain cases, within eclipse, you have to create i.e. a field before referencing it in generated code. You still
+	 * have to create the field, if its not already there, in 'handle', because for example preHandle would never even be called in ecj mode.
+	 */
+	public void preHandle(AnnotationValues<T> annotation, org.eclipse.jdt.internal.compiler.ast.Annotation ast, EclipseNode annotationNode) {
+	}
 }

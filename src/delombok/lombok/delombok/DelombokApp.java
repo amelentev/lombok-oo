@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +40,7 @@ import lombok.core.LombokApp;
 import org.mangosdk.spi.ProviderFor;
 
 @ProviderFor(LombokApp.class)
-public class DelombokApp implements LombokApp {
+public class DelombokApp extends LombokApp {
 	@Override public int runApp(List<String> args) throws Exception {
 		try {
 			Class.forName("com.sun.tools.javac.main.JavaCompiler");
@@ -87,7 +87,7 @@ public class DelombokApp implements LombokApp {
 		final JarFile toolsJarFile = new JarFile(toolsJar);
 		
 		ClassLoader loader = new ClassLoader() {
-			private Class<?>loadStreamAsClass(String name, boolean resolve, InputStream in) throws ClassNotFoundException {
+			private Class<?> loadStreamAsClass(String name, boolean resolve, InputStream in) throws ClassNotFoundException {
 				try {
 					try {
 						byte[] b = new byte[65536];
@@ -245,7 +245,7 @@ public class DelombokApp implements LombokApp {
 	}
 	
 	@Override public List<String> getAppAliases() {
-		return Arrays.asList("unlombok", "delombok");
+		return Arrays.asList("unlombok");
 	}
 	
 	@Override public String getAppDescription() {

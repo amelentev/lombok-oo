@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,7 @@ import com.zwitserloot.cmdreader.Requires;
 import com.zwitserloot.cmdreader.Shorthand;
 
 @ProviderFor(LombokApp.class)
-public class CreateLombokRuntimeApp implements LombokApp {
+public class CreateLombokRuntimeApp extends LombokApp {
 	private List<RuntimeDependencyInfo> infoObjects;
 	
 	@Override public String getAppName() {
@@ -64,7 +64,7 @@ public class CreateLombokRuntimeApp implements LombokApp {
 	}
 	
 	@Override public List<String> getAppAliases() {
-		return Arrays.asList("createRuntime", "runtime");
+		return Arrays.asList("runtime");
 	}
 	
 	private static class CmdArgs {
@@ -160,6 +160,8 @@ public class CreateLombokRuntimeApp implements LombokApp {
 		boolean success = false;
 		try {
 			JarOutputStream jar = new JarOutputStream(out);
+			deps.put("LICENSE", CreateLombokRuntimeApp.class);
+			deps.put("AUTHORS", CreateLombokRuntimeApp.class);
 			for (Entry<String, Class<?>> dep : deps.entrySet()) {
 				InputStream in = dep.getValue().getResourceAsStream("/" + dep.getKey());
 				try {

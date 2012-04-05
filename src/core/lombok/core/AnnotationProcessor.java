@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,26 +21,31 @@
  */
 package lombok.core;
 
+import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.Method;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic.Kind;
 
+import lombok.patcher.inject.LiveInjector;
+
 @SupportedAnnotationTypes("*")
-@SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AnnotationProcessor extends AbstractProcessor {
 	private static String trace(Throwable t) {
 		StringWriter w = new StringWriter();
@@ -58,6 +63,8 @@ public class AnnotationProcessor extends AbstractProcessor {
 	private final List<ProcessorDescriptor> active = new ArrayList<ProcessorDescriptor>();
 	private final List<String> delayedWarnings = new ArrayList<String>();
 	
+	private static final Map<ClassLoader, Boolean> lombokAlreadyAddedTo = new WeakHashMap<ClassLoader, Boolean>();
+	
 	static class JavacDescriptor extends ProcessorDescriptor {
 		private Processor processor;
 		
@@ -69,7 +76,8 @@ public class AnnotationProcessor extends AbstractProcessor {
 			if (!procEnv.getClass().getName().equals("com.sun.tools.javac.processing.JavacProcessingEnvironment")) return false;
 			
 			try {
-				processor = (Processor)Class.forName("lombok.javac.apt.Processor").newInstance();
+				ClassLoader classLoader = findAndPatchClassLoader(procEnv);
+				processor = (Processor)Class.forName("lombok.javac.apt.Processor", false, classLoader).newInstance();
 			} catch (Exception e) {
 				delayedWarnings.add("You found a bug in lombok; lombok.javac.apt.Processor is not available. Lombok will not run during this compilation: " + trace(e));
 				return false;
@@ -77,9 +85,32 @@ public class AnnotationProcessor extends AbstractProcessor {
 				delayedWarnings.add("Can't load javac processor due to (most likely) a class loader problem: " + trace(e));
 				return false;
 			}
-			
-			processor.init(procEnv);
+			try {
+				processor.init(procEnv);
+			} catch (Exception e) {
+				delayedWarnings.add("lombok.javac.apt.Processor could not be initialized. Lombok will not run during this compilation: " + trace(e));
+				return false;
+			} catch (NoClassDefFoundError e) {
+				delayedWarnings.add("Can't initialize javac processor due to (most likely) a class loader problem: " + trace(e));
+				return false;
+			}
 			return true;
+		}
+		
+		private ClassLoader findAndPatchClassLoader(ProcessingEnvironment procEnv) throws Exception {
+			ClassLoader environmentClassLoader = procEnv.getClass().getClassLoader();
+			if (environmentClassLoader != null && environmentClassLoader.getClass().getCanonicalName().equals("org.codehaus.plexus.compiler.javac.IsolatedClassLoader")) {
+				if (lombokAlreadyAddedTo.put(environmentClassLoader, true) == null) {
+					Method m = environmentClassLoader.getClass().getDeclaredMethod("addURL", URL.class);
+					URL selfUrl = new File(LiveInjector.findPathJar(AnnotationProcessor.class)).toURI().toURL();
+					m.invoke(environmentClassLoader, selfUrl);
+				}
+				return environmentClassLoader;
+			}
+			
+			ClassLoader ourClassLoader = JavacDescriptor.class.getClassLoader();
+			if (ourClassLoader == null) return ClassLoader.getSystemClassLoader();
+			return ourClassLoader;
 		}
 		
 		@Override boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
@@ -88,43 +119,21 @@ public class AnnotationProcessor extends AbstractProcessor {
 	}
 	
 	static class EcjDescriptor extends ProcessorDescriptor {
-		private Processor processor;
-		
 		@Override String getName() {
 			return "ECJ";
 		}
 		
 		@Override boolean want(ProcessingEnvironment procEnv, List<String> delayedWarnings) {
 			if (!procEnv.getClass().getName().startsWith("org.eclipse.jdt.")) return false;
-			boolean inEclipse;
-			try {
-				Class.forName("org.eclipse.core.runtime.Platform");	//if this works, we're in eclipse.
-				inEclipse = true;
-			} catch (ClassNotFoundException e) {
-				inEclipse = false;	//We're in ecj.
-			}
 			
-			if (inEclipse) {
-				delayedWarnings.add("You should not install lombok.jar as an annotation processor in eclipse. Instead, run lombok.jar as a java application and follow the instructions.");
-				return false;
-			}
-			
-			try {
-				processor = (Processor)Class.forName("lombok.eclipse.apt.Processor").newInstance();
-			} catch (Exception e) {
-				delayedWarnings.add("You found a bug in lombok; lombok.eclipse.apt.Processor is not available. Lombok will not run during this compilation: " + trace(e));
-				return false;
-			} catch (NoClassDefFoundError e) {
-				delayedWarnings.add("Can't load eclipse processor due to (most likely) a class loader problem: " + trace(e));
-				return false;
-			}
-			
-			processor.init(procEnv);
+			// Lombok used to work as annotation processor to ecj but that never actually worked properly, so we disabled the feature in 0.10.0.
+			// Because loading lombok as an agent in any ECJ-based non-interactive tool works just fine, we're not going to generate any warnings, as we'll
+			// likely generate more false positives than be helpful.
 			return true;
 		}
 		
 		@Override boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-			return processor.process(annotations, roundEnv);
+			return false;
 		}
 	}
 	
@@ -161,5 +170,12 @@ public class AnnotationProcessor extends AbstractProcessor {
 		}
 		
 		return handled;
+	}
+	
+	/**
+	 * We just return the latest version of whatever JDK we run on. Stupid? Yeah, but it's either that or warnings on all versions but 1. Blame Joe.
+	 */
+	@Override public SourceVersion getSupportedSourceVersion() {
+		return SourceVersion.values()[SourceVersion.values().length - 1];
 	}
 }

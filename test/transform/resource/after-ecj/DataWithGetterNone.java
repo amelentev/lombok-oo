@@ -15,18 +15,21 @@
   public @java.lang.Override @java.lang.SuppressWarnings("all") boolean equals(final java.lang.Object o) {
     if ((o == this))
         return true;
-    if ((o == null))
+    if ((! (o instanceof DataWithGetterNone)))
         return false;
-    if ((o.getClass() != this.getClass()))
+    final @java.lang.SuppressWarnings("all") DataWithGetterNone other = (DataWithGetterNone) o;
+    if ((! other.canEqual((java.lang.Object) this)))
         return false;
-    final DataWithGetterNone other = (DataWithGetterNone) o;
     if ((this.x != other.x))
         return false;
     if ((this.y != other.y))
         return false;
-    if (((this.z == null) ? (other.z != null) : (! this.z.equals(other.z))))
+    if (((this.z == null) ? (other.z != null) : (! this.z.equals((java.lang.Object) other.z))))
         return false;
     return true;
+  }
+  public @java.lang.SuppressWarnings("all") boolean canEqual(final java.lang.Object other) {
+    return (other instanceof DataWithGetterNone);
   }
   public @java.lang.Override @java.lang.SuppressWarnings("all") int hashCode() {
     final int PRIME = 31;

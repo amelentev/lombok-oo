@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,8 @@
  */
 package lombok.javac.handlers;
 
-import static com.sun.tools.javac.code.TypeTags.*;
 import static lombok.javac.handlers.JavacHandlerUtil.*;
+import static lombok.javac.Javac.*;
 
 import java.util.Collection;
 
@@ -34,8 +34,7 @@ import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.core.AST.Kind;
 import lombok.core.AnnotationValues;
-import lombok.core.handlers.TransformationsUtil;
-import lombok.javac.Javac;
+import lombok.core.TransformationsUtil;
 import lombok.javac.JavacAnnotationHandler;
 import lombok.javac.JavacNode;
 
@@ -44,32 +43,35 @@ import org.mangosdk.spi.ProviderFor;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.code.TypeTags;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCAssign;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.tree.JCTree.JCReturn;
 import com.sun.tools.javac.tree.JCTree.JCStatement;
 import com.sun.tools.javac.tree.JCTree.JCTypeParameter;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 import com.sun.tools.javac.util.List;
+import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Name;
 
 /**
  * Handles the {@code lombok.Setter} annotation for javac.
  */
 @ProviderFor(JavacAnnotationHandler.class)
-public class HandleSetter implements JavacAnnotationHandler<Setter> {
-	public boolean generateSetterForType(JavacNode typeNode, JavacNode errorNode, AccessLevel level, boolean checkForTypeLevelSetter) {
+public class HandleSetter extends JavacAnnotationHandler<Setter> {
+	public void generateSetterForType(JavacNode typeNode, JavacNode errorNode, AccessLevel level, boolean checkForTypeLevelSetter) {
 		if (checkForTypeLevelSetter) {
 			if (typeNode != null) for (JavacNode child : typeNode.down()) {
 				if (child.getKind() == Kind.ANNOTATION) {
-					if (Javac.annotationTypeMatches(Setter.class, child)) {
+					if (annotationTypeMatches(Setter.class, child)) {
 						//The annotation will make it happen, so we can skip it.
-						return true;
+						return;
 					}
 				}
 			}
@@ -82,7 +84,7 @@ public class HandleSetter implements JavacAnnotationHandler<Setter> {
 		
 		if (typeDecl == null || notAClass) {
 			errorNode.addError("@Setter is only supported on a class or a field.");
-			return false;
+			return;
 		}
 		
 		for (JavacNode field : typeNode.down()) {
@@ -97,7 +99,6 @@ public class HandleSetter implements JavacAnnotationHandler<Setter> {
 			
 			generateSetterForField(field, errorNode.get(), level);
 		}
-		return true;
 	}
 	
 	/**
@@ -118,7 +119,7 @@ public class HandleSetter implements JavacAnnotationHandler<Setter> {
 	public void generateSetterForField(JavacNode fieldNode, DiagnosticPosition pos, AccessLevel level) {
 		for (JavacNode child : fieldNode.down()) {
 			if (child.getKind() == Kind.ANNOTATION) {
-				if (Javac.annotationTypeMatches(Setter.class, child)) {
+				if (annotationTypeMatches(Setter.class, child)) {
 					//The annotation will make it happen, so we can skip it.
 					return;
 				}
@@ -128,94 +129,140 @@ public class HandleSetter implements JavacAnnotationHandler<Setter> {
 		createSetterForField(level, fieldNode, fieldNode, false);
 	}
 	
-	@Override public boolean handle(AnnotationValues<Setter> annotation, JCAnnotation ast, JavacNode annotationNode) {
+	@Override public void handle(AnnotationValues<Setter> annotation, JCAnnotation ast, JavacNode annotationNode) {
 		Collection<JavacNode> fields = annotationNode.upFromAnnotationToFields();
-		markAnnotationAsProcessed(annotationNode, Setter.class);
+		deleteAnnotationIfNeccessary(annotationNode, Setter.class);
 		deleteImportFromCompilationUnit(annotationNode, "lombok.AccessLevel");
 		JavacNode node = annotationNode.up();
 		AccessLevel level = annotation.getInstance().value();
 		
-		if (level == AccessLevel.NONE) return true;
+		if (level == AccessLevel.NONE || node == null) return;
 		
-		if (node == null) return false;
-		if (node.getKind() == Kind.FIELD) {
-			return createSetterForFields(level, fields, annotationNode, true);
+		switch (node.getKind()) {
+		case FIELD:
+			createSetterForFields(level, fields, annotationNode, true);
+			break;
+		case TYPE:
+			generateSetterForType(node, annotationNode, level, false);
+			break;
 		}
-		if (node.getKind() == Kind.TYPE) {
-			return generateSetterForType(node, annotationNode, level, false);
-		}
-		return false;
 	}
 	
-	private boolean createSetterForFields(AccessLevel level, Collection<JavacNode> fieldNodes, JavacNode errorNode, boolean whineIfExists) {
+	private void createSetterForFields(AccessLevel level, Collection<JavacNode> fieldNodes, JavacNode errorNode, boolean whineIfExists) {
+		
 		for (JavacNode fieldNode : fieldNodes) {
 			createSetterForField(level, fieldNode, errorNode, whineIfExists);
 		}
-		
-		return true;
 	}
 	
-	private boolean createSetterForField(AccessLevel level,
-			JavacNode fieldNode, JavacNode errorNode, boolean whineIfExists) {
+	private void createSetterForField(AccessLevel level,
+			JavacNode fieldNode, JavacNode source, boolean whineIfExists) {
+		
 		if (fieldNode.getKind() != Kind.FIELD) {
 			fieldNode.addError("@Setter is only supported on a class or a field.");
-			return true;
+			return;
 		}
 		
 		JCVariableDecl fieldDecl = (JCVariableDecl)fieldNode.get();
-		String methodName = toSetterName(fieldDecl);
+		String methodName = toSetterName(fieldNode);
 		
-		switch (methodExists(methodName, fieldNode, false)) {
-		case EXISTS_BY_LOMBOK:
-			return true;
-		case EXISTS_BY_USER:
-			if (whineIfExists) errorNode.addWarning(
-					String.format("Not generating %s(%s %s): A method with that name already exists",
-					methodName, fieldDecl.vartype, fieldDecl.name));
-			return true;
-		default:
-		case NOT_EXISTS:
-			//continue with creating the setter
+		if (methodName == null) {
+			source.addWarning("Not generating setter for this field: It does not fit your @Accessors prefix list.");
+			return;
+		}
+		
+		for (String altName : toAllSetterNames(fieldNode)) {
+			switch (methodExists(altName, fieldNode, false, 1)) {
+			case EXISTS_BY_LOMBOK:
+				return;
+			case EXISTS_BY_USER:
+				if (whineIfExists) {
+					String altNameExpl = "";
+					if (!altName.equals(methodName)) altNameExpl = String.format(" (%s)", altName);
+					source.addWarning(
+						String.format("Not generating %s(): A method with that name already exists%s", methodName, altNameExpl));
+				}
+				return;
+			default:
+			case NOT_EXISTS:
+				//continue scanning the other alt names.
+			}
 		}
 		
 		long access = toJavacModifier(level) | (fieldDecl.mods.flags & Flags.STATIC);
 		
-		injectMethod(fieldNode.up(), createSetter(access, fieldNode, fieldNode.getTreeMaker()));
-		
-		return true;
+		JCMethodDecl createdSetter = createSetter(access, fieldNode, fieldNode.getTreeMaker(), source.get());
+		injectMethod(fieldNode.up(), createdSetter);
 	}
 	
-	private JCMethodDecl createSetter(long access, JavacNode field, TreeMaker treeMaker) {
+	private JCMethodDecl createSetter(long access, JavacNode field, TreeMaker treeMaker, JCTree source) {
+		String setterName = toSetterName(field);
+		boolean returnThis = shouldReturnThis(field);
+		if (setterName == null) return null;
+		
 		JCVariableDecl fieldDecl = (JCVariableDecl) field.get();
 		
-		JCExpression fieldRef = createFieldAccessor(treeMaker, field, true);
+		JCExpression fieldRef = createFieldAccessor(treeMaker, field, FieldAccess.ALWAYS_FIELD);
 		JCAssign assign = treeMaker.Assign(fieldRef, treeMaker.Ident(fieldDecl.name));
 		
-		List<JCStatement> statements;
+		ListBuffer<JCStatement> statements = ListBuffer.lb();
 		List<JCAnnotation> nonNulls = findAnnotations(field, TransformationsUtil.NON_NULL_PATTERN);
 		List<JCAnnotation> nullables = findAnnotations(field, TransformationsUtil.NULLABLE_PATTERN);
 		
+		Name methodName = field.toName(setterName);
+		List<JCAnnotation> annsOnParam = nonNulls.appendList(nullables);
+		
+		JCVariableDecl param = treeMaker.VarDef(treeMaker.Modifiers(Flags.FINAL, annsOnParam), fieldDecl.name, fieldDecl.vartype, null);
+		
 		if (nonNulls.isEmpty()) {
-			statements = List.<JCStatement>of(treeMaker.Exec(assign));
+			statements.append(treeMaker.Exec(assign));
 		} else {
 			JCStatement nullCheck = generateNullCheck(treeMaker, field);
-			if (nullCheck != null) statements = List.<JCStatement>of(nullCheck, treeMaker.Exec(assign));
-			else statements = List.<JCStatement>of(treeMaker.Exec(assign));
+			if (nullCheck != null) statements.append(nullCheck);
+			statements.append(treeMaker.Exec(assign));
 		}
 		
-		JCBlock methodBody = treeMaker.Block(0, statements);
-		Name methodName = field.toName(toSetterName(fieldDecl));
-		JCVariableDecl param = treeMaker.VarDef(treeMaker.Modifiers(Flags.FINAL, nonNulls.appendList(nullables)), fieldDecl.name, fieldDecl.vartype, null);
-		//WARNING: Do not use field.getSymbolTable().voidType - that field has gone through non-backwards compatible API changes within javac1.6.
-		JCExpression methodType = treeMaker.Type(new JCNoType(TypeTags.VOID));
+		JCExpression methodType = null;
+		if (returnThis) {
+			JavacNode typeNode = field;
+			while (typeNode != null && typeNode.getKind() != Kind.TYPE) typeNode = typeNode.up();
+			if (typeNode != null && typeNode.get() instanceof JCClassDecl) {
+				JCClassDecl type = (JCClassDecl) typeNode.get();
+				ListBuffer<JCExpression> typeArgs = ListBuffer.lb();
+				if (!type.typarams.isEmpty()) {
+					for (JCTypeParameter tp : type.typarams) {
+						typeArgs.append(treeMaker.Ident(tp.name));
+					}
+					methodType = treeMaker.TypeApply(treeMaker.Ident(type.name), typeArgs.toList());
+				} else {
+					methodType = treeMaker.Ident(type.name);
+				}
+			}
+		}
 		
+		if (methodType == null) {
+			//WARNING: Do not use field.getSymbolTable().voidType - that field has gone through non-backwards compatible API changes within javac1.6.
+			methodType = treeMaker.Type(new JCNoType(getCtcInt(TypeTags.class, "VOID")));
+			returnThis = false;
+		}
+		
+		if (returnThis) {
+			JCReturn returnStatement = treeMaker.Return(treeMaker.Ident(field.toName("this")));
+			statements.append(returnStatement);
+		}
+		
+		JCBlock methodBody = treeMaker.Block(0, statements.toList());
 		List<JCTypeParameter> methodGenericParams = List.nil();
 		List<JCVariableDecl> parameters = List.of(param);
 		List<JCExpression> throwsClauses = List.nil();
 		JCExpression annotationMethodDefaultValue = null;
 		
-		return treeMaker.MethodDef(treeMaker.Modifiers(access, List.<JCAnnotation>nil()), methodName, methodType,
-				methodGenericParams, parameters, throwsClauses, methodBody, annotationMethodDefaultValue);
+		List<JCAnnotation> annsOnMethod = List.nil();
+		if (isFieldDeprecated(field)) {
+			annsOnMethod = annsOnMethod.prepend(treeMaker.Annotation(chainDots(field, "java", "lang", "Deprecated"), List.<JCExpression>nil()));
+		}
+		return recursiveSetGeneratedBy(treeMaker.MethodDef(treeMaker.Modifiers(access, annsOnMethod), methodName, methodType,
+				methodGenericParams, parameters, throwsClauses, methodBody, annotationMethodDefaultValue), source);
 	}
 	
 	private static class JCNoType extends Type implements NoType {
@@ -225,12 +272,9 @@ public class HandleSetter implements JavacAnnotationHandler<Setter> {
 		
 		@Override
 		public TypeKind getKind() {
-			switch (tag) {
-			case VOID:  return TypeKind.VOID;
-			case NONE:  return TypeKind.NONE;
-			default:
-				throw new AssertionError("Unexpected tag: " + tag);
-			}
+			if (tag == getCtcInt(TypeTags.class, "VOID")) return TypeKind.VOID;
+			if (tag == getCtcInt(TypeTags.class, "NONE")) return TypeKind.NONE;
+			throw new AssertionError("Unexpected tag: " + tag);
 		}
 		
 		@Override

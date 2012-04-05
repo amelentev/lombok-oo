@@ -1,5 +1,5 @@
 /*
- * Copyright © 2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,8 +38,12 @@ public class ClassFileMetaData {
 	private static final byte STRING = 8;
 	private static final byte FIELD = 9;
 	private static final byte METHOD = 10;
-	private static final byte IMETHOD = 11;
+	private static final byte INTERFACE_METHOD = 11;
 	private static final byte NAME_TYPE = 12;
+	// New in java7: support for methodhandles and invokedynamic
+	private static final byte METHOD_HANDLE = 15;
+	private static final byte METHOD_TYPE = 16;
+	private static final byte INVOKE_DYNAMIC = 18;
 	
 	private static final int NOT_FOUND = -1;
 	private static final int START_OF_CONSTANT_POOL = 8; 
@@ -74,14 +78,19 @@ public class ClassFileMetaData {
 				break;
 			case CLASS:
 			case STRING:
+			case METHOD_TYPE:
 				position += 2;
+				break;
+			case METHOD_HANDLE:
+				position += 3;
 				break;
 			case INTEGER:
 			case FLOAT:
 			case FIELD:
 			case METHOD:
-			case IMETHOD:
+			case INTERFACE_METHOD:
 			case NAME_TYPE:
+			case INVOKE_DYNAMIC:
 				position += 4;
 				break;
 			case LONG:
@@ -205,6 +214,7 @@ public class ClassFileMetaData {
 	 * Checks if the constant pool contains the provided string constant, which implies the constant is used somewhere in the code.
 	 * 
 	 * NB: String literals get concatenated by the compiler.
+	 * NB2: This method does NOT do any kind of normalization.
 	 */
 	public boolean containsStringConstant(String value) {
 		int index = findUtf8(value);
@@ -273,25 +283,23 @@ public class ClassFileMetaData {
 	
 	private long readLong(int index) {
 		int pos = offsets[index];
-		return ((long)read32(pos)) << 32 | read32(pos + 4);
+		return ((long)read32(pos)) << 32 | (read32(pos + 4) & 0x00000000FFFFFFFFL);
 	}
 	
 	private double readDouble(int index) {
-		int pos = offsets[index];
-		long bits = ((long)read32(pos)) << 32 | (read32(pos + 4) & 0x00000000FFFFFFFF);
-		return Double.longBitsToDouble(bits);
+		return Double.longBitsToDouble(readLong(index));
 	}
 	
-	private long readInteger(int index) {
+	private int readInteger(int index) {
 		return read32(offsets[index]);
 	}
 	
 	private float readFloat(int index) {
-		return Float.intBitsToFloat(read32(offsets[index]));
+		return Float.intBitsToFloat(readInteger(index));
 	}
 	
 	private int read32(int pos) {
-		return (byteCode[pos] & 0xFF) << 24 | (byteCode[pos + 1] & 0xFF) << 16 | (byteCode[pos + 2] & 0xFF) << 8 | (byteCode[pos + 3] &0xFF);
+		return (byteCode[pos] & 0xFF) << 24 | (byteCode[pos + 1] & 0xFF) << 16 | (byteCode[pos + 2] & 0xFF) << 8 | (byteCode[pos + 3] & 0xFF);
 	}
 	
 	/**
@@ -356,7 +364,7 @@ public class ClassFileMetaData {
 				appendAccess(result.append("Field "), i);
 				break;
 			case METHOD:
-			case IMETHOD:
+			case INTERFACE_METHOD:
 				appendAccess(result.append("Method "), i);
 				break;
 			case NAME_TYPE:
@@ -367,6 +375,15 @@ public class ClassFileMetaData {
 				break;
 			case DOUBLE:
 				result.append("double ").append(readDouble(i));
+				break;
+			case METHOD_HANDLE:
+				result.append("MethodHandle...");
+				break;
+			case METHOD_TYPE:
+				result.append("MethodType...");
+				break;
+			case INVOKE_DYNAMIC:
+				result.append("InvokeDynamic...");
 				break;
 			case 0:
 				result.append("(cont.)");
@@ -395,7 +412,7 @@ public class ClassFileMetaData {
 	
 	private boolean isMethod(int i) {
 		byte type = types[i];
-		return type == METHOD || type == IMETHOD;
+		return type == METHOD || type == INTERFACE_METHOD;
 	}
 	
 	private int findNameAndType(String name, String descriptor) {

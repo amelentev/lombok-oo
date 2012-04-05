@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,16 +25,18 @@ import static lombok.eclipse.Eclipse.*;
 import static lombok.eclipse.handlers.EclipseHandlerUtil.*;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import lombok.AccessLevel;
 import lombok.Setter;
-import lombok.core.AnnotationValues;
 import lombok.core.AST.Kind;
-import lombok.core.handlers.TransformationsUtil;
-import lombok.eclipse.Eclipse;
+import lombok.core.AnnotationValues;
+import lombok.core.TransformationsUtil;
 import lombok.eclipse.EclipseAnnotationHandler;
 import lombok.eclipse.EclipseNode;
+import lombok.eclipse.handlers.EclipseHandlerUtil.FieldAccess;
 
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.Annotation;
@@ -44,9 +46,14 @@ import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.NameReference;
+import org.eclipse.jdt.internal.compiler.ast.ParameterizedSingleTypeReference;
+import org.eclipse.jdt.internal.compiler.ast.ReturnStatement;
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
+import org.eclipse.jdt.internal.compiler.ast.SingleTypeReference;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
+import org.eclipse.jdt.internal.compiler.ast.ThisReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
@@ -56,7 +63,7 @@ import org.mangosdk.spi.ProviderFor;
  * Handles the {@code lombok.Setter} annotation for eclipse.
  */
 @ProviderFor(EclipseAnnotationHandler.class)
-public class HandleSetter implements EclipseAnnotationHandler<Setter> {
+public class HandleSetter extends EclipseAnnotationHandler<Setter> {
 	public boolean generateSetterForType(EclipseNode typeNode, EclipseNode pos, AccessLevel level, boolean checkForTypeLevelSetter) {
 		if (checkForTypeLevelSetter) {
 			if (typeNode != null) for (EclipseNode child : typeNode.down()) {
@@ -83,10 +90,8 @@ public class HandleSetter implements EclipseAnnotationHandler<Setter> {
 		for (EclipseNode field : typeNode.down()) {
 			if (field.getKind() != Kind.FIELD) continue;
 			FieldDeclaration fieldDecl = (FieldDeclaration) field.get();
-			//Skip fields that start with $
-			if (fieldDecl.name.length > 0 && fieldDecl.name[0] == '$') continue;
-			//Skip static fields.
-			if ((fieldDecl.modifiers & ClassFileConstants.AccStatic) != 0) continue;
+			if (!filterField(fieldDecl)) continue;
+			
 			//Skip final fields.
 			if ((fieldDecl.modifiers & ClassFileConstants.AccFinal) != 0) continue;
 			
@@ -120,99 +125,141 @@ public class HandleSetter implements EclipseAnnotationHandler<Setter> {
 		createSetterForField(level, fieldNode, fieldNode, pos, false);
 	}
 	
-	public boolean handle(AnnotationValues<Setter> annotation, Annotation ast, EclipseNode annotationNode) {
+	public void handle(AnnotationValues<Setter> annotation, Annotation ast, EclipseNode annotationNode) {
 		EclipseNode node = annotationNode.up();
 		AccessLevel level = annotation.getInstance().value();
-		if (level == AccessLevel.NONE) return true;
+		if (level == AccessLevel.NONE || node == null) return;
 		
-		if (node == null) return false;
-		if (node.getKind() == Kind.FIELD) {
-			return createSetterForFields(level, annotationNode.upFromAnnotationToFields(), annotationNode, annotationNode.get(), true);
+		switch (node.getKind()) {
+		case FIELD:
+			createSetterForFields(level, annotationNode.upFromAnnotationToFields(), annotationNode, annotationNode.get(), true);
+			break;
+		case TYPE:
+			generateSetterForType(node, annotationNode, level, false);
+			break;
 		}
-		if (node.getKind() == Kind.TYPE) {
-			return generateSetterForType(node, annotationNode, level, false);
-		}
-		return false;
 	}
 	
-	private boolean createSetterForFields(AccessLevel level, Collection<EclipseNode> fieldNodes, EclipseNode errorNode, ASTNode source, boolean whineIfExists) {
+	private void createSetterForFields(AccessLevel level, Collection<EclipseNode> fieldNodes, EclipseNode errorNode, ASTNode source, boolean whineIfExists) {
 		for (EclipseNode fieldNode : fieldNodes) {
 			createSetterForField(level, fieldNode, errorNode, source, whineIfExists);
 		}
-		return true;
 	}
 	
-	private boolean createSetterForField(AccessLevel level,
-			EclipseNode fieldNode, EclipseNode errorNode, ASTNode pos, boolean whineIfExists) {
+	private void createSetterForField(AccessLevel level,
+			EclipseNode fieldNode, EclipseNode errorNode, ASTNode source, boolean whineIfExists) {
 		if (fieldNode.getKind() != Kind.FIELD) {
 			errorNode.addError("@Setter is only supported on a class or a field.");
-			return true;
+			return;
 		}
 		
 		FieldDeclaration field = (FieldDeclaration) fieldNode.get();
-		String setterName = TransformationsUtil.toSetterName(new String(field.name));
+		TypeReference fieldType = copyType(field.type, source);
+		boolean isBoolean = nameEquals(fieldType.getTypeName(), "boolean") && fieldType.dimensions() == 0;
+		String setterName = toSetterName(fieldNode, isBoolean);
+		boolean shouldReturnThis = shouldReturnThis(fieldNode);
+		if (setterName == null) {
+			errorNode.addWarning("Not generating setter for this field: It does not fit your @Accessors prefix list.");
+			return;
+		}
 		
 		int modifier = toEclipseModifier(level) | (field.modifiers & ClassFileConstants.AccStatic);
 		
-		switch (methodExists(setterName, fieldNode, false)) {
-		case EXISTS_BY_LOMBOK:
-			return true;
-		case EXISTS_BY_USER:
-			if (whineIfExists) errorNode.addWarning(
-					String.format("Not generating %s(%s %s): A method with that name already exists",
-					setterName, field.type, new String(field.name)));
-			return true;
-		default:
-		case NOT_EXISTS:
-			//continue with creating the setter
+		for (String altName : toAllSetterNames(fieldNode, isBoolean)) {
+			switch (methodExists(altName, fieldNode, false, 1)) {
+			case EXISTS_BY_LOMBOK:
+				return;
+			case EXISTS_BY_USER:
+				if (whineIfExists) {
+					String altNameExpl = "";
+					if (!altName.equals(setterName)) altNameExpl = String.format(" (%s)", altName);
+					errorNode.addWarning(
+						String.format("Not generating %s(): A method with that name already exists%s", setterName, altNameExpl));
+				}
+				return;
+			default:
+			case NOT_EXISTS:
+				//continue scanning the other alt names.
+			}
 		}
 		
-		MethodDeclaration method = generateSetter((TypeDeclaration) fieldNode.up().get(), fieldNode, setterName, modifier, pos);
-		
+		MethodDeclaration method = generateSetter((TypeDeclaration) fieldNode.up().get(), fieldNode, setterName, shouldReturnThis, modifier, source);
 		injectMethod(fieldNode.up(), method);
-		
-		return true;
 	}
 	
-	private MethodDeclaration generateSetter(TypeDeclaration parent, EclipseNode fieldNode, String name, int modifier, ASTNode source) {
+	private MethodDeclaration generateSetter(TypeDeclaration parent, EclipseNode fieldNode, String name, boolean shouldReturnThis, int modifier, ASTNode source) {
 		FieldDeclaration field = (FieldDeclaration) fieldNode.get();
 		int pS = source.sourceStart, pE = source.sourceEnd;
 		long p = (long)pS << 32 | pE;
 		MethodDeclaration method = new MethodDeclaration(parent.compilationResult);
-		Eclipse.setGeneratedBy(method, source);
+		setGeneratedBy(method, source);
 		method.modifiers = modifier;
-		method.returnType = TypeReference.baseTypeReference(TypeIds.T_void, 0);
-		method.returnType.sourceStart = pS; method.returnType.sourceEnd = pE;
-		Eclipse.setGeneratedBy(method.returnType, source);
-		method.annotations = null;
+		if (shouldReturnThis) {
+			EclipseNode type = fieldNode;
+			while (type != null && type.getKind() != Kind.TYPE) type = type.up();
+			if (type != null && type.get() instanceof TypeDeclaration) {
+				TypeDeclaration typeDecl = (TypeDeclaration) type.get();
+				if (typeDecl.typeParameters != null && typeDecl.typeParameters.length > 0) {
+					TypeReference[] refs = new TypeReference[typeDecl.typeParameters.length];
+					int idx = 0;
+					for (TypeParameter param : typeDecl.typeParameters) {
+						TypeReference typeRef = new SingleTypeReference(param.name, (long)param.sourceStart << 32 | param.sourceEnd);
+						setGeneratedBy(typeRef, source);
+						refs[idx++] = typeRef;
+					}
+					method.returnType = new ParameterizedSingleTypeReference(typeDecl.name, refs, 0, p);
+				} else method.returnType = new SingleTypeReference(((TypeDeclaration)type.get()).name, p);
+			}
+		}
+		
+		if (method.returnType == null) {
+			method.returnType = TypeReference.baseTypeReference(TypeIds.T_void, 0);
+			method.returnType.sourceStart = pS; method.returnType.sourceEnd = pE;
+			shouldReturnThis = false;
+		}
+		setGeneratedBy(method.returnType, source);
+		if (isFieldDeprecated(fieldNode)) {
+			method.annotations = new Annotation[] { generateDeprecatedAnnotation(source) };
+		}
 		Argument param = new Argument(field.name, p, copyType(field.type, source), Modifier.FINAL);
 		param.sourceStart = pS; param.sourceEnd = pE;
-		Eclipse.setGeneratedBy(param, source);
+		setGeneratedBy(param, source);
 		method.arguments = new Argument[] { param };
 		method.selector = name.toCharArray();
 		method.binding = null;
 		method.thrownExceptions = null;
 		method.typeParameters = null;
 		method.bits |= ECLIPSE_DO_NOT_TOUCH_FLAG;
-		Expression fieldRef = createFieldAccessor(fieldNode, true, source);
+		Expression fieldRef = createFieldAccessor(fieldNode, FieldAccess.ALWAYS_FIELD, source);
 		NameReference fieldNameRef = new SingleNameReference(field.name, p);
-		Eclipse.setGeneratedBy(fieldNameRef, source);
+		setGeneratedBy(fieldNameRef, source);
 		Assignment assignment = new Assignment(fieldRef, fieldNameRef, (int)p);
-		assignment.sourceStart = pS; assignment.sourceEnd = pE;
-		Eclipse.setGeneratedBy(assignment, source);
+		assignment.sourceStart = pS; assignment.sourceEnd = assignment.statementEnd = pE;
+		setGeneratedBy(assignment, source);
 		method.bodyStart = method.declarationSourceStart = method.sourceStart = source.sourceStart;
 		method.bodyEnd = method.declarationSourceEnd = method.sourceEnd = source.sourceEnd;
 		
 		Annotation[] nonNulls = findAnnotations(field, TransformationsUtil.NON_NULL_PATTERN);
 		Annotation[] nullables = findAnnotations(field, TransformationsUtil.NULLABLE_PATTERN);
+		List<Statement> statements = new ArrayList<Statement>(5);
 		if (nonNulls.length == 0) {
-			method.statements = new Statement[] { assignment };
+			statements.add(assignment);
 		} else {
 			Statement nullCheck = generateNullCheck(field, source);
-			if (nullCheck != null) method.statements = new Statement[] { nullCheck, assignment };
-			else method.statements = new Statement[] { assignment };
+			if (nullCheck != null) statements.add(nullCheck);
+			statements.add(assignment);
 		}
-		Annotation[] copiedAnnotations = copyAnnotations(nonNulls, nullables, source);
+		
+		if (shouldReturnThis) {
+			ThisReference thisRef = new ThisReference(pS, pE);
+			setGeneratedBy(thisRef, source);
+			ReturnStatement returnThis = new ReturnStatement(thisRef, pS, pE);
+			setGeneratedBy(returnThis, source);
+			statements.add(returnThis);
+		}
+		method.statements = statements.toArray(new Statement[0]);
+		
+		Annotation[] copiedAnnotations = copyAnnotations(source, nonNulls, nullables);
 		if (copiedAnnotations.length != 0) param.annotations = copiedAnnotations;
 		return method;
 	}

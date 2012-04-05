@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ import javax.tools.Diagnostic;
 import lombok.core.AST.Kind;
 
 import com.sun.tools.javac.code.Symtab;
+import com.sun.tools.javac.model.JavacTypes;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
@@ -178,6 +179,15 @@ public class JavacNode extends lombok.core.LombokNode<JavacAST, JavacNode, JCTre
 	}
 	
 	/**
+	 * Convenient shortcut to the owning JavacAST object's getTypesUtil method.
+	 * 
+	 * @see JavacAST#getTypesUtil()
+	 */
+	public JavacTypes getTypesUtil() {
+		return ast.getTypesUtil();
+	}
+	
+	/**
 	 * Convenient shortcut to the owning JavacAST object's getContext method.
 	 * 
 	 * @see JavacAST#getContext()
@@ -187,8 +197,7 @@ public class JavacNode extends lombok.core.LombokNode<JavacAST, JavacNode, JCTre
 	}
 	
 	public boolean shouldDeleteLombokAnnotations() {
-		DeleteLombokAnnotations dla = ast.getContext().get(DeleteLombokAnnotations.class);
-		return dla != null && dla.isDeleteLombokAnnotations();
+		return LombokOptions.shouldDeleteLombokAnnotations(ast.getContext());
 	}
 	
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -45,15 +45,23 @@ public class RunTestsViaDelombok extends AbstractRunTests {
 		delombok.setDiagnosticsListener(new DiagnosticListener<JavaFileObject>() {
 			@Override public void report(Diagnostic<? extends JavaFileObject> d) {
 				String msg = d.getMessage(Locale.ENGLISH);
-				Matcher m = Pattern.compile("^" + Pattern.quote(file.getAbsolutePath()) + "\\s*:\\s*\\d+\\s*:\\s*(?:warning:\\s*)?(.*)$").matcher(msg);
+				Matcher m = Pattern.compile(
+						"^" + Pattern.quote(file.getAbsolutePath()) +
+						"\\s*:\\s*\\d+\\s*:\\s*(?:warning:\\s*)?(.*)$", Pattern.DOTALL).matcher(msg);
 				if (m.matches()) msg = m.group(1);
 				messages.append(String.format("%d:%d %s %s\n", d.getLineNumber(), d.getColumnNumber(), d.getKind(), msg));
 			}
 		});
 		
-		delombok.addFile(file.getParentFile(), file.getName());
-		delombok.setSourcepath(file.getParentFile().getAbsolutePath());
+		delombok.addFile(file.getAbsoluteFile().getParentFile(), file.getName());
+		delombok.setSourcepath(file.getAbsoluteFile().getParent());
 		delombok.setWriter(result);
-		delombok.delombok();
+		Locale originalLocale = Locale.getDefault();
+		try {
+			Locale.setDefault(Locale.ENGLISH);
+			delombok.delombok();
+		} finally {
+			Locale.setDefault(originalLocale);
+		}
 	}
 }

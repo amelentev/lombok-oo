@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -40,6 +40,11 @@ public class TestLombokFilesIdempotent implements DirectoryRunner.TestParams {
 	}
 	
 	@Override
+	public File getMessagesDirectory() {
+		return new File("test/transform/resource/messages-idempotent");
+	}
+	
+	@Override
 	public DirectoryRunner.Compiler getCompiler() {
 		return DirectoryRunner.Compiler.DELOMBOK;
 	}
@@ -47,10 +52,5 @@ public class TestLombokFilesIdempotent implements DirectoryRunner.TestParams {
 	@Override
 	public boolean printErrors() {
 		return true;
-	}
-	
-	@Override
-	public File getMessagesDirectory() {
-		return null;
 	}
 }

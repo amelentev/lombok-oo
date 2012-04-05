@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import javax.annotation.processing.Messager;
 import javax.tools.Diagnostic;
@@ -36,7 +37,9 @@ import lombok.core.SpiLoadUtil;
 import lombok.core.TypeLibrary;
 import lombok.core.TypeResolver;
 import lombok.core.AnnotationValues.AnnotationValueDecodeFail;
+import lombok.javac.handlers.JavacHandlerUtil;
 
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 
@@ -51,7 +54,7 @@ public class HandlerLibrary {
 	private final Map<String, AnnotationHandlerContainer<?>> annotationHandlers = new HashMap<String, AnnotationHandlerContainer<?>>();
 	private final Collection<JavacASTVisitor> visitorHandlers = new ArrayList<JavacASTVisitor>();
 	private final Messager messager;
-	private boolean skipPrintAST = true;
+	private int phase = 0;
 	
 	/**
 	 * Creates a new HandlerLibrary that will report any problems or errors to the provided messager.
@@ -70,8 +73,12 @@ public class HandlerLibrary {
 			this.annotationClass = annotationClass;
 		}
 		
-		public boolean handle(final JavacNode node) {
-			return handler.handle(Javac.createAnnotation(annotationClass, node), (JCAnnotation)node.get(), node);
+		public boolean isResolutionBased() {
+			return handler.getClass().isAnnotationPresent(ResolutionBased.class);
+		}
+		
+		public void handle(final JavacNode node) {
+			handler.handle(JavacHandlerUtil.createAnnotation(annotationClass, node), (JCAnnotation)node.get(), node);
 		}
 	}
 	
@@ -101,8 +108,9 @@ public class HandlerLibrary {
 			Class<? extends Annotation> annotationClass =
 				SpiLoadUtil.findAnnotationClass(handler.getClass(), JavacAnnotationHandler.class);
 			AnnotationHandlerContainer<?> container = new AnnotationHandlerContainer(handler, annotationClass);
-			if (lib.annotationHandlers.put(container.annotationClass.getName(), container) != null) {
-				lib.javacWarning("Duplicate handlers for annotation type: " + container.annotationClass.getName());
+			String annotationClassName = container.annotationClass.getName().replace("$", ".");
+			if (lib.annotationHandlers.put(annotationClassName, container) != null) {
+				lib.javacWarning("Duplicate handlers for annotation type: " + annotationClassName);
 			}
 			lib.typeLibrary.addType(container.annotationClass.getName());
 		}
@@ -137,6 +145,15 @@ public class HandlerLibrary {
 		if (t != null) t.printStackTrace();
 	}
 	
+	private static final Map<JCTree, Object> handledMap = new WeakHashMap<JCTree, Object>();
+	private static final Object MARKER = new Object();
+	
+	private boolean checkAndSetHandled(JCTree node) {
+		synchronized (handledMap) {
+			return handledMap.put(node, MARKER) != MARKER;
+		}
+	}
+	
 	/**
 	 * Handles the provided annotation node by first finding a qualifying instance of
 	 * {@link JavacAnnotationHandler} and if one exists, calling it with a freshly cooked up
@@ -154,18 +171,26 @@ public class HandlerLibrary {
 	 * @param node The Lombok AST Node representing the Annotation AST Node.
 	 * @param annotation 'node.get()' - convenience parameter.
 	 */
-	public boolean handleAnnotation(JCCompilationUnit unit, JavacNode node, JCAnnotation annotation) {
-		TypeResolver resolver = new TypeResolver(typeLibrary, node.getPackageDeclaration(), node.getImportStatements());
+	public void handleAnnotation(JCCompilationUnit unit, JavacNode node, JCAnnotation annotation) {
+		TypeResolver resolver = new TypeResolver(node.getPackageDeclaration(), node.getImportStatements());
 		String rawType = annotation.annotationType.toString();
-		boolean handled = false;
-		for (String fqn : resolver.findTypeMatches(node, rawType)) {
+		for (String fqn : resolver.findTypeMatches(node, typeLibrary, rawType)) {
 			boolean isPrintAST = fqn.equals(PrintAST.class.getName());
-			if (isPrintAST == skipPrintAST) continue;
+			if (isPrintAST && phase != 2) continue;
+			if (!isPrintAST && phase == 2) continue;
 			AnnotationHandlerContainer<?> container = annotationHandlers.get(fqn);
 			if (container == null) continue;
 			
 			try {
-				handled |= container.handle(node);
+				if (container.isResolutionBased() && phase == 1) {
+					if (checkAndSetHandled(annotation)) container.handle(node);
+				}
+				if (!container.isResolutionBased() && phase == 0) {
+					if (checkAndSetHandled(annotation)) container.handle(node);
+				}
+				if (container.annotationClass == PrintAST.class && phase == 2) {
+					if (checkAndSetHandled(annotation)) container.handle(node);
+				}
 			} catch (AnnotationValueDecodeFail fail) {
 				fail.owner.setError(fail.getMessage(), fail.idx);
 			} catch (Throwable t) {
@@ -174,8 +199,6 @@ public class HandlerLibrary {
 				javacError(String.format("Lombok annotation handler %s failed on " + sourceName, container.handler.getClass()), t);
 			}
 		}
-		
-		return handled;
 	}
 	
 	/**
@@ -183,13 +206,9 @@ public class HandlerLibrary {
 	 */
 	public void callASTVisitors(JavacAST ast) {
 		for (JavacASTVisitor visitor : visitorHandlers) try {
-			if (!visitor.isResolutionBased()) ast.traverse(visitor);
-		} catch (Throwable t) {
-			javacError(String.format("Lombok visitor handler %s failed", visitor.getClass()), t);
-		}
-		
-		for (JavacASTVisitor visitor : visitorHandlers) try {
-			if (visitor.isResolutionBased()) ast.traverse(visitor);
+			boolean isResolutionBased = visitor.getClass().isAnnotationPresent(ResolutionBased.class);
+			if (!isResolutionBased && phase == 0) ast.traverse(visitor);
+			if (isResolutionBased && phase == 1) ast.traverse(visitor);
 		} catch (Throwable t) {
 			javacError(String.format("Lombok visitor handler %s failed", visitor.getClass()), t);
 		}
@@ -197,17 +216,17 @@ public class HandlerLibrary {
 	
 	/**
 	 * Lombok does not currently support triggering annotations in a specified order; the order is essentially
-	 * random right now. This lack of order is particularly annoying for the {@code PrintAST} annotation,
-	 * which is almost always intended to run last. Hence, this hack, which lets it in fact run last.
-	 * 
-	 * @see #skipAllButPrintAST()
+	 * random right now. As a temporary hack we've identified 3 important phases.
 	 */
-	public void skipPrintAST() {
-		skipPrintAST = true;
+	public void setPreResolutionPhase() {
+		phase = 0;
 	}
 	
-	/** @see #skipPrintAST() */
-	public void skipAllButPrintAST() {
-		skipPrintAST = false;
+	public void setPostResolutionPhase() {
+		phase = 1;
+	}
+	
+	public void setPrintASTPhase() {
+		phase = 2;
 	}
 }

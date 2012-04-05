@@ -5,7 +5,7 @@
 	<link rel="stylesheet" type="text/css" href="features.css" />
 	<link rel="shortcut icon" href="../favicon.ico" type="image/x-icon" />
 	<meta name="description" content="Spice up your java" />
-	<title>@Data</title>
+	<title>@EqualsAndHashCode</title>
 </head><body><div id="pepper">
 	<div class="minimumHeight"></div>
 	<div class="meat">
@@ -28,10 +28,16 @@
 			</p><p>
 			Setting <code>callSuper</code> to <em>true</em> when you don't extend anything (you extend <code>java.lang.Object</code>) is a compile-time error, because it would turn
 			the generated <code>equals()</code> and <code>hashCode()</code> implementations into having the same behaviour as simply inheriting these methods from <code>java.lang.Object</code>:
-			only the same object will be equal to each other and will have the same hashCode. Obviously, inheriting <code>java.lang.Object</code> is the right strategy if you want this behaviour.
+			only the same object will be equal to each other and will have the same hashCode.
 			Not setting <code>callSuper</code> to <em>true</em> when you extend another class generates a warning, because unless the superclass has no (equality-important) fields, lombok
 			cannot generate an implementation for you that takes into account the fields declared by your superclasses. You'll need to write your own implementations, or rely on the
 			<code>callSuper</code> chaining facility.
+			</p><p>
+			<em>NEW in Lombok 0.10: </em>Unless your class is <code>final</code> and extends <code>java.lang.Object</code>, lombok generates a <code>canEqual</code> method
+			which means JPA proxies can still be equal to their base class, but subclasses that add new state don't break the equals contract. The complicated reasons for
+			why such a method is necessary are explained in this paper: <a href="http://www.artima.com/lejava/articles/equality.html">How to Write an Equality Method in Java</a>.
+			If all classes in a hierarchy are a mix of scala case classes and classes with lombok-generated equals methods, all equality will 'just work'.
+			If you need to write your own equals methods, you should always override <code>canEqual</code> if you change <code>equals</code> and <code>hashCode</code>.
 			</p>
 		</div>
 		<div class="snippets">
@@ -59,9 +65,9 @@
 				return false. This is analogous to <code>java.lang.Double</code>'s equals method, and is in fact required to ensure that comparing an object
 				to an exact copy of itself returns <code>true</code> for equality.
 				</p><p>
-				If there is <em>any</em> method named either <code>hashCode</code> or <code>equals</code>, regardless of parameters or return type,
-				that method will not be generated, and a warning is emitted instead. <code>hashCode</code> and <code>equals</code> need to be in sync with
-				each other, which lombok cannot guarantee if it is only generating one of the two methods, hence you always get a warning if one <em>or</em> both
+				If there is <em>any</em> method named either <code>hashCode</code>, <code>equals</code> or <code>canEqual</code>, regardless of
+				parameters or return type, no methods will be generated, and a warning is emitted instead. These 3 methods need to be in sync with
+				each other, which lombok cannot guarantee unless it generates all the methods, hence you always get a warning if one <em>or</em> more
 				of the methods already exist.
 				</p><p>
 				Attempting to exclude fields that don't exist or would have been excluded anyway (because they are static or transient) results in warnings on the named fields.
@@ -78,7 +84,7 @@
 		</div>
 		<div class="footer">
 			<a href="index.html">Back to features</a> | <a href="ToString.html">Previous feature (@ToString)</a> | <a href="Constructor.html">Next feature (@<em>X</em>Constructor)</a><br />
-			<a href="../credits.html" class="creditsLink">credits</a> | <span class="copyright">Copyright &copy; 2009 Reinier Zwitserloot and Roel Spilker, licensed under the <a href="http://www.opensource.org/licenses/mit-license.php">MIT license</a>.</span>
+			<a href="../credits.html" class="creditsLink">credits</a> | <span class="copyright">Copyright &copy; 2009-2011 The Project Lombok Authors, licensed under the <a href="http://www.opensource.org/licenses/mit-license.php">MIT license</a>.</span>
 		</div>
 		<div style="clear: both;"></div>
 	</div>

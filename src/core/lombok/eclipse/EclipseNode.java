@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,6 +50,8 @@ public class EclipseNode extends lombok.core.LombokNode<EclipseAST, EclipseNode,
 	 * Visits this node and all child nodes depth-first, calling the provided visitor's visit methods.
 	 */
 	public void traverse(EclipseASTVisitor visitor) {
+		if (!this.isCompleteParse() && visitor.getClass().isAnnotationPresent(DeferUntilPostDiet.class)) return;
+		
 		switch (getKind()) {
 		case COMPILATION_UNIT:
 			visitor.visitCompilationUnit(this, (CompilationUnitDeclaration)get());
@@ -109,7 +111,7 @@ public class EclipseNode extends lombok.core.LombokNode<EclipseAST, EclipseNode,
 				visitor.visitAnnotationOnLocal((LocalDeclaration)parent.get(), this, (Annotation)get());
 				break;
 			default:
-				throw new AssertionError("Annotion not expected as child of a " + up().getKind());
+				throw new AssertionError("Annotation not expected as child of a " + up().getKind());
 			}
 			break;
 		case STATEMENT:

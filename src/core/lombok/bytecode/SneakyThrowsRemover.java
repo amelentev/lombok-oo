@@ -1,5 +1,5 @@
 /*
- * Copyright © 2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2010-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,55 +21,22 @@
  */
 package lombok.bytecode;
 
+import static lombok.bytecode.AsmUtil.fixJSRInlining;
+
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.core.DiagnosticsReceiver;
 import lombok.core.PostCompilerTransformation;
 
 import org.mangosdk.spi.ProviderFor;
-import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.Attribute;
-import org.objectweb.asm.ClassAdapter;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Label;
-import org.objectweb.asm.MethodAdapter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.commons.JSRInlinerAdapter;
 
 @ProviderFor(PostCompilerTransformation.class)
 public class SneakyThrowsRemover implements PostCompilerTransformation {
-	private static class FixedClassWriter extends ClassWriter {
-		FixedClassWriter(ClassReader classReader, int flags) {
-			super(classReader, flags);
-		}
-		
-		@Override protected String getCommonSuperClass(String type1, String type2) {
-			//By default, ASM will attempt to live-load the class types, which will fail if meddling with classes in an
-			//environment with custom classloaders, such as Equinox. It's just an optimization; returning Object is always legal.
-			try {
-				return super.getCommonSuperClass(type1, type2);
-			} catch (Exception e) {
-				return "java/lang/Object";
-			}
-		}
-	}
-	
-	protected byte[] fixJSRInlining(byte[] byteCode) {
-		ClassReader reader = new ClassReader(byteCode);
-		ClassWriter writer = new FixedClassWriter(reader, 0);
-		
-		ClassVisitor visitor = new ClassAdapter(writer) {
-			@Override public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-				return new JSRInlinerAdapter(super.visitMethod(access, name, desc, signature, exceptions), access, name, desc, signature, exceptions);
-			}
-		};
-		
-		reader.accept(visitor, 0);
-		return writer.toByteArray();
-	}
 	
 	@Override public byte[] applyTransformations(byte[] original, String fileName, DiagnosticsReceiver diagnostics) {
 		if (!new ClassFileMetaData(original).usesMethod("lombok/Lombok", "sneakyThrow")) return null;
@@ -81,123 +48,27 @@ public class SneakyThrowsRemover implements PostCompilerTransformation {
 		
 		final AtomicBoolean changesMade = new AtomicBoolean();
 		
-		class SneakyThrowsRemoverVisitor extends MethodAdapter {
-			boolean justAddedAthrow = false;
-			
+		class SneakyThrowsRemoverVisitor extends MethodVisitor {
 			SneakyThrowsRemoverVisitor(MethodVisitor mv) {
-				super(mv);
+				super(Opcodes.ASM4, mv);
 			}
 			
 			@Override public void visitMethodInsn(int opcode, String owner, String name, String desc) {
-				justAddedAthrow = false;
-				boolean hit = true;
-				if (hit && opcode != Opcodes.INVOKESTATIC) hit = false;
-				if (hit && !"sneakyThrow".equals(name)) hit = false;
-				if (hit && !"lombok/Lombok".equals(owner)) hit = false;
-				if (hit && !"(Ljava/lang/Throwable;)Ljava/lang/RuntimeException;".equals(desc)) hit = false;
-				if (hit) {
+				if (
+						opcode == Opcodes.INVOKESTATIC &&
+						"sneakyThrow".equals(name) &&
+						"lombok/Lombok".equals(owner) &&
+						"(Ljava/lang/Throwable;)Ljava/lang/RuntimeException;".equals(desc)) {
+					
 					changesMade.set(true);
-					justAddedAthrow = true;
 					super.visitInsn(Opcodes.ATHROW);
 				} else {
 					super.visitMethodInsn(opcode, owner, name, desc);
 				}
 			}
-			
-			@Override public void visitInsn(int opcode) {
-				if (!justAddedAthrow || opcode != Opcodes.ATHROW) {
-					super.visitInsn(opcode);
-				}
-				justAddedAthrow = false;
-			}
-			
-			@Override public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-				justAddedAthrow = false;
-				return super.visitAnnotation(desc, visible);
-			}
-			
-			@Override public AnnotationVisitor visitAnnotationDefault() {
-				justAddedAthrow = false;
-				return super.visitAnnotationDefault();
-			}
-			
-			@Override public void visitAttribute(Attribute attr) {
-				justAddedAthrow = false;
-				super.visitAttribute(attr);
-			}
-			
-			@Override public void visitFieldInsn(int opcode, String owner, String name, String desc) {
-				justAddedAthrow = false;
-				super.visitFieldInsn(opcode, owner, name, desc);
-			}
-			
-			@Override public void visitIincInsn(int var, int increment) {
-				justAddedAthrow = false;
-				super.visitIincInsn(var, increment);
-			}
-			
-			@Override public void visitIntInsn(int opcode, int operand) {
-				justAddedAthrow = false;
-				super.visitIntInsn(opcode, operand);
-			}
-			
-			@Override public void visitJumpInsn(int opcode, Label label) {
-				justAddedAthrow = false;
-				super.visitJumpInsn(opcode, label);
-			}
-			
-			@Override public void visitLabel(Label label) {
-				justAddedAthrow = false;
-				super.visitLabel(label);
-			}
-			
-			@Override public void visitLdcInsn(Object cst) {
-				justAddedAthrow = false;
-				super.visitLdcInsn(cst);
-			}
-			
-			@Override public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
-				justAddedAthrow = false;
-				super.visitLocalVariable(name, desc, signature, start, end, index);
-			}
-			
-			@Override public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
-				justAddedAthrow = false;
-				super.visitLookupSwitchInsn(dflt, keys, labels);
-			}
-			
-			@Override public void visitMultiANewArrayInsn(String desc, int dims) {
-				justAddedAthrow = false;
-				super.visitMultiANewArrayInsn(desc, dims);
-			}
-			
-			@Override public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
-				justAddedAthrow = false;
-				return super.visitParameterAnnotation(parameter, desc, visible);
-			}
-			
-			@Override public void visitTableSwitchInsn(int min, int max, Label dflt, Label[] labels) {
-				justAddedAthrow = false;
-				super.visitTableSwitchInsn(min, max, dflt, labels);
-			}
-			
-			@Override public void visitTryCatchBlock(Label start, Label end, Label handler, String type) {
-				justAddedAthrow = false;
-				super.visitTryCatchBlock(start, end, handler, type);
-			}
-			
-			@Override public void visitTypeInsn(int opcode, String type) {
-				justAddedAthrow = false;
-				super.visitTypeInsn(opcode, type);
-			}
-			
-			@Override public void visitVarInsn(int opcode, int var) {
-				justAddedAthrow = false;
-				super.visitVarInsn(opcode, var);
-			}
 		}
 		
-		reader.accept(new ClassAdapter(writer) {
+		reader.accept(new ClassVisitor(Opcodes.ASM4, writer) {
 			@Override public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
 				return new SneakyThrowsRemoverVisitor(super.visitMethod(access, name, desc, signature, exceptions));
 			}

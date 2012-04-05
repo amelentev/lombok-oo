@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -56,5 +56,19 @@ public class Lombok {
 	@SuppressWarnings("unchecked")
 	private static <T extends Throwable> void sneakyThrow0(Throwable t) throws T {
 		throw (T)t;
+	}
+	
+	/**
+	 * Returns the parameter directly. <br />
+	 * 
+	 * This method can be used to prevent a static analyzer to determine
+	 * the nullness of the passed parameter.
+	 * 
+	 * @param <T> the type of the parameter
+	 * @param value the value to return
+	 * @return value
+	 */
+	public static <T> T preventNullAnalysis(T value) {
+		return value;
 	}
 }

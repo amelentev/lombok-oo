@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,11 @@
  */
 package lombok.eclipse;
 
+import static lombok.eclipse.handlers.EclipseHandlerUtil.error;
+
 import java.lang.reflect.Field;
 
+import lombok.core.debug.DebugSnapshotStore;
 import lombok.patcher.Symbols;
 
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
@@ -53,7 +56,7 @@ public class TransformEclipseAST {
 	private static final Field astCacheField;
 	private static final HandlerLibrary handlers;
 	
-	private static boolean disableLombok = false;
+	public static boolean disableLombok = false;
 	
 	static {
 		Field f = null;
@@ -63,7 +66,7 @@ public class TransformEclipseAST {
 			h = HandlerLibrary.load();
 		} catch (Throwable t) {
 			try {
-				Eclipse.error(null, "Problem initializing lombok", t);
+				error(null, "Problem initializing lombok", t);
 			} catch (Throwable t2) {
 				System.err.println("Problem initializing lombok");
 				t.printStackTrace();
@@ -84,6 +87,29 @@ public class TransformEclipseAST {
 		transform(parser, ast);
 	}
 	
+	public static EclipseAST getAST(CompilationUnitDeclaration ast, boolean forceRebuild) {
+		EclipseAST existing = null;
+		if (astCacheField != null) {
+			try {
+				existing = (EclipseAST)astCacheField.get(ast);
+			} catch (Exception e) {
+				// existing remains null
+			}
+		}
+		
+		if (existing == null) {
+			existing = new EclipseAST(ast);
+			if (astCacheField != null) try {
+				astCacheField.set(ast, existing);
+			} catch (Exception ignore) {
+			}
+		} else {
+			existing.rebuild(forceRebuild);
+		}
+		
+		return existing;
+	}
+	
 	/**
 	 * This method is called immediately after Eclipse finishes building a CompilationUnitDeclaration, which is
 	 * the top-level AST node when Eclipse parses a source file. The signature is 'magic' - you should not
@@ -100,14 +126,15 @@ public class TransformEclipseAST {
 		
 		if (Symbols.hasSymbol("lombok.disable")) return;
 		
+		// Do NOT abort if (ast.bits & ASTNode.HasAllMethodBodies) != 0 - that doesn't work.
+		
 		try {
-			EclipseAST existing = getCache(ast);
-			if (existing == null) {
-				existing = new EclipseAST(ast);
-				setCache(ast, existing);
-			} else existing.reparse();
+			DebugSnapshotStore.INSTANCE.snapshot(ast, "transform entry");
+			EclipseAST existing = getAST(ast, false);
 			new TransformEclipseAST(existing).go();
+			DebugSnapshotStore.INSTANCE.snapshot(ast, "transform exit");
 		} catch (Throwable t) {
+			DebugSnapshotStore.INSTANCE.snapshot(ast, "transform error: %s", t.getClass().getSimpleName());
 			try {
 				String message = "Lombok can't parse this source: " + t.toString();
 				
@@ -115,7 +142,7 @@ public class TransformEclipseAST {
 				t.printStackTrace();
 			} catch (Throwable t2) {
 				try {
-					Eclipse.error(ast, "Can't create an error in the problems dialog while adding: " + t.toString(), t2);
+					error(ast, "Can't create an error in the problems dialog while adding: " + t.toString(), t2);
 				} catch (Throwable t3) {
 					//This seems risky to just silently turn off lombok, but if we get this far, something pretty
 					//drastic went wrong. For example, the eclipse help system's JSP compiler will trigger a lombok call,
@@ -129,24 +156,6 @@ public class TransformEclipseAST {
 		}
 	}
 	
-	private static EclipseAST getCache(CompilationUnitDeclaration ast) {
-		if (astCacheField == null) return null;
-		try {
-			return (EclipseAST)astCacheField.get(ast);
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
-	
-	private static void setCache(CompilationUnitDeclaration ast, EclipseAST cache) {
-		if (astCacheField != null) try {
-			astCacheField.set(ast, cache);
-		} catch (Exception ignore) {
-			ignore.printStackTrace();
-		}
-	}
-	
 	public TransformEclipseAST(EclipseAST ast) {
 		this.ast = ast;
 	}
@@ -156,47 +165,41 @@ public class TransformEclipseAST {
 	 * then handles any PrintASTs.
 	 */
 	public void go() {
-		handlers.skipPrintAST();
-		ast.traverse(new AnnotationVisitor());
+		ast.traverse(new AnnotationVisitor(true));
 		handlers.callASTVisitors(ast);
-		handlers.skipAllButPrintAST();
-		ast.traverse(new AnnotationVisitor());
+		ast.traverse(new AnnotationVisitor(false));
 	}
 	
 	private static class AnnotationVisitor extends EclipseASTAdapter {
+		private final boolean skipPrintAst;
+		
+		public AnnotationVisitor(boolean skipAllButPrintAST) {
+			this.skipPrintAst = skipAllButPrintAST;
+		}
+		
 		@Override public void visitAnnotationOnField(FieldDeclaration field, EclipseNode annotationNode, Annotation annotation) {
-			if (annotationNode.isHandled()) return;
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
-			boolean handled = handlers.handle(top, annotationNode, annotation);
-			if (handled) annotationNode.setHandled();
+			handlers.handleAnnotation(top, annotationNode, annotation, skipPrintAst);
 		}
 		
 		@Override public void visitAnnotationOnMethodArgument(Argument arg, AbstractMethodDeclaration method, EclipseNode annotationNode, Annotation annotation) {
-			if (annotationNode.isHandled()) return;
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
-			boolean handled = handlers.handle(top, annotationNode, annotation);
-			if (handled) annotationNode.setHandled();
+			handlers.handleAnnotation(top, annotationNode, annotation, skipPrintAst);
 		}
 		
 		@Override public void visitAnnotationOnLocal(LocalDeclaration local, EclipseNode annotationNode, Annotation annotation) {
-			if (annotationNode.isHandled()) return;
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
-			boolean handled = handlers.handle(top, annotationNode, annotation);
-			if (handled) annotationNode.setHandled();
+			handlers.handleAnnotation(top, annotationNode, annotation, skipPrintAst);
 		}
 		
 		@Override public void visitAnnotationOnMethod(AbstractMethodDeclaration method, EclipseNode annotationNode, Annotation annotation) {
-			if (annotationNode.isHandled()) return;
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
-			boolean handled = handlers.handle(top, annotationNode, annotation);
-			if (handled) annotationNode.setHandled();
+			handlers.handleAnnotation(top, annotationNode, annotation, skipPrintAst);
 		}
 		
 		@Override public void visitAnnotationOnType(TypeDeclaration type, EclipseNode annotationNode, Annotation annotation) {
-			if (annotationNode.isHandled()) return;
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
-			boolean handled = handlers.handle(top, annotationNode, annotation);
-			if (handled) annotationNode.setHandled();
+			handlers.handleAnnotation(top, annotationNode, annotation, skipPrintAst);
 		}
 	}
 }

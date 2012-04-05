@@ -1,7 +1,8 @@
 import java.util.*;
+import lombok.val;
 
 public class ValWeirdTypes<Z> {
-	private final List<Z> fieldList;
+	private List<Z> fieldList;
 	
 	public void testGenerics() {
 		List<String> list = new ArrayList<String>();
@@ -50,5 +51,17 @@ public class ValWeirdTypes<Z> {
 		val c = 1 < System.currentTimeMillis();
 		val d = c ? a : b;
 		java.util.RandomAccess confirm = c ? a : b;
+	}
+	
+	public void nullType() {
+		val nully = null;
+	}
+	
+	public void testArrays() {
+		val intArray = new int[] {1, 2, 3};
+		val multiDimArray = new Object[][] {{}};
+		val copy = intArray;
+		val single = multiDimArray[0];
+		val singleInt = copy[0];
 	}
 }

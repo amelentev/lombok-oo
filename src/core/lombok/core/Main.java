@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,7 @@ public class Main {
 	}
 	
 	@ProviderFor(LombokApp.class)
-	public static class VersionApp implements LombokApp {
+	public static class VersionApp extends LombokApp {
 		@Override public String getAppName() {
 			return "version";
 		}
@@ -54,7 +54,7 @@ public class Main {
 		}
 		
 		@Override public List<String> getAppAliases() {
-			return Arrays.asList("version", "-version", "--version");
+			return Arrays.asList("-version", "--version");
 		}
 		
 		@Override public int runApp(List<String> args) {
@@ -64,7 +64,7 @@ public class Main {
 	}
 	
 	@ProviderFor(LombokApp.class)
-	public static class LicenseApp implements LombokApp {
+	public static class LicenseApp extends LombokApp {
 		@Override public String getAppName() {
 			return "license";
 		}
@@ -74,7 +74,7 @@ public class Main {
 		}
 		
 		@Override public List<String> getAppAliases() {
-			return Arrays.asList("license", "licence", "copyright", "copyleft", "gpl");
+			return Arrays.asList("licence", "copyright", "copyleft", "gpl");
 		}
 		
 		@Override public int runApp(List<String> args) {
@@ -142,12 +142,13 @@ public class Main {
 			out.println("------------------------------");
 		}
 		out.println("projectlombok.org v" + Version.getVersion());
-		out.println("Copyright (C) 2009-2010 Reinier Zwitserloot and Roel Spilker.");
+		out.println("Copyright (C) 2009-2012 The Project Lombok Authors.");
 		out.println("Run 'lombok license' to see the lombok license agreement.");
 		out.println();
 		out.println("Run lombok without any parameters to start the graphical installer.");
 		out.println("Other available commands:");
 		for (LombokApp app : apps) {
+			if (app.isDebugTool()) continue;
 			String[] desc = app.getAppDescription().split("\n");
 			for (int i = 0; i < desc.length; i++) {
 				out.printf("  %15s    %s\n", i == 0 ? app.getAppName() : "", desc[i]);

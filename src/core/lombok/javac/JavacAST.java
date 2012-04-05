@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,9 @@ import lombok.core.AST;
 
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.model.JavacElements;
+import com.sun.tools.javac.model.JavacTypes;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCCatch;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
@@ -61,6 +63,7 @@ public class JavacAST extends AST<JavacAST, JavacNode, JCTree> {
 	private final JavacElements elements;
 	private final TreeMaker treeMaker;
 	private final Symtab symtab;
+	private final JavacTypes javacTypes;
 	private final Log log;
 	private final Context context;
 	
@@ -80,6 +83,7 @@ public class JavacAST extends AST<JavacAST, JavacNode, JCTree> {
 		this.elements = JavacElements.instance(context);
 		this.treeMaker = TreeMaker.instance(context);
 		this.symtab = Symtab.instance(context);
+		this.javacTypes = JavacTypes.instance(context);
 		clearChanged();
 	}
 
@@ -133,6 +137,13 @@ public class JavacAST extends AST<JavacAST, JavacNode, JCTree> {
 	/** @return The symbol table used by this AST for symbols. */
 	public Symtab getSymbolTable() {
 		return symtab;
+	}
+	
+	/**
+	 * @return The implementation of {@link javax.lang.model.util.Types} of javac. Contains a few extra methods beyond
+	 * the ones listed in the official annotation API interface. */
+	public JavacTypes getTypesUtil() {
+		return javacTypes;
 	}
 	
 	/** {@inheritDoc} */
@@ -265,9 +276,10 @@ public class JavacAST extends AST<JavacAST, JavacNode, JCTree> {
 	/** For javac, both JCExpression and JCStatement are considered as valid children types. */
 	@Override
 	protected Collection<Class<? extends JCTree>> getStatementTypes() {
-		Collection<Class<? extends JCTree>> collection = new ArrayList<Class<? extends JCTree>>(2);
+		Collection<Class<? extends JCTree>> collection = new ArrayList<Class<? extends JCTree>>(3);
 		collection.add(JCStatement.class);
 		collection.add(JCExpression.class);
+		collection.add(JCCatch.class);
 		return collection;
 	}
 	

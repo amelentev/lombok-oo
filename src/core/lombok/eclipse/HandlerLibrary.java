@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 package lombok.eclipse;
 
 import static lombok.eclipse.Eclipse.toQualifiedName;
+import static lombok.eclipse.handlers.EclipseHandlerUtil.*;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import lombok.Lombok;
 import lombok.core.AnnotationValues;
@@ -38,6 +40,7 @@ import lombok.core.TypeLibrary;
 import lombok.core.TypeResolver;
 import lombok.core.AnnotationValues.AnnotationValueDecodeFail;
 
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 
@@ -65,10 +68,20 @@ public class HandlerLibrary {
 			this.annotationClass = annotationClass;
 		}
 		
-		public boolean handle(org.eclipse.jdt.internal.compiler.ast.Annotation annotation,
+		public void handle(org.eclipse.jdt.internal.compiler.ast.Annotation annotation,
 				final EclipseNode annotationNode) {
-			AnnotationValues<T> annValues = Eclipse.createAnnotation(annotationClass, annotationNode);
-			return handler.handle(annValues, annotation, annotationNode);
+			AnnotationValues<T> annValues = createAnnotation(annotationClass, annotationNode);
+			handler.handle(annValues, annotation, annotationNode);
+		}
+		
+		public void preHandle(org.eclipse.jdt.internal.compiler.ast.Annotation annotation,
+				final EclipseNode annotationNode) {
+			AnnotationValues<T> annValues = createAnnotation(annotationClass, annotationNode);
+			handler.preHandle(annValues, annotation, annotationNode);
+		}
+		
+		public boolean deferUntilPostDiet() {
+			return handler.getClass().isAnnotationPresent(DeferUntilPostDiet.class);
 		}
 	}
 	
@@ -77,8 +90,6 @@ public class HandlerLibrary {
 	
 	private Collection<EclipseASTVisitor> visitorHandlers = new ArrayList<EclipseASTVisitor>();
 
-	private boolean skipPrintAST;
-	
 	/**
 	 * Creates a new HandlerLibrary.  Errors will be reported to the Eclipse Error log.
 	 * then uses SPI discovery to load all annotation and visitor based handlers so that future calls
@@ -102,12 +113,13 @@ public class HandlerLibrary {
 					Class<? extends Annotation> annotationClass =
 						SpiLoadUtil.findAnnotationClass(handler.getClass(), EclipseAnnotationHandler.class);
 					AnnotationHandlerContainer<?> container = new AnnotationHandlerContainer(handler, annotationClass);
-					if (lib.annotationHandlers.put(container.annotationClass.getName(), container) != null) {
-						Eclipse.error(null, "Duplicate handlers for annotation type: " + container.annotationClass.getName());
+					String annotationClassName = container.annotationClass.getName().replace("$", ".");
+					if (lib.annotationHandlers.put(annotationClassName, container) != null) {
+						error(null, "Duplicate handlers for annotation type: " + annotationClassName, null);
 					}
 					lib.typeLibrary.addType(container.annotationClass.getName());
 				} catch (Throwable t) {
-					Eclipse.error(null, "Can't load Lombok annotation handler for Eclipse: ", t);
+					error(null, "Can't load Lombok annotation handler for Eclipse: ", t);
 				}
 			}
 		} catch (IOException e) {
@@ -123,6 +135,21 @@ public class HandlerLibrary {
 			}
 		} catch (Throwable t) {
 			throw Lombok.sneakyThrow(t);
+		}
+	}
+	
+	private static final Map<ASTNode, Object> handledMap = new WeakHashMap<ASTNode, Object>();
+	private static final Object MARKER = new Object();
+	
+	private boolean checkAndSetHandled(ASTNode node) {
+		synchronized (handledMap) {
+			return handledMap.put(node, MARKER) != MARKER;
+		}
+	}
+	
+	private boolean needsHandling(ASTNode node) {
+		synchronized (handledMap) {
+			return handledMap.get(node) != MARKER;
 		}
 	}
 	
@@ -143,32 +170,33 @@ public class HandlerLibrary {
 	 * @param annotationNode The Lombok AST Node representing the Annotation AST Node.
 	 * @param annotation 'node.get()' - convenience parameter.
 	 */
-	public boolean handle(CompilationUnitDeclaration ast, EclipseNode annotationNode,
-			org.eclipse.jdt.internal.compiler.ast.Annotation annotation) {
+	public void handleAnnotation(CompilationUnitDeclaration ast, EclipseNode annotationNode, org.eclipse.jdt.internal.compiler.ast.Annotation annotation, boolean skipPrintAst) {
 		String pkgName = annotationNode.getPackageDeclaration();
 		Collection<String> imports = annotationNode.getImportStatements();
 		
-		TypeResolver resolver = new TypeResolver(typeLibrary, pkgName, imports);
+		TypeResolver resolver = new TypeResolver(pkgName, imports);
 		TypeReference rawType = annotation.type;
-		if (rawType == null) return false;
-		boolean handled = false;
-		for (String fqn : resolver.findTypeMatches(annotationNode, toQualifiedName(annotation.type.getTypeName()))) {
+		if (rawType == null) return;
+		
+		for (String fqn : resolver.findTypeMatches(annotationNode, typeLibrary, toQualifiedName(annotation.type.getTypeName()))) {
 			boolean isPrintAST = fqn.equals(PrintAST.class.getName());
-			if (isPrintAST == skipPrintAST) continue;
+			if (isPrintAST == skipPrintAst) continue;
 			AnnotationHandlerContainer<?> container = annotationHandlers.get(fqn);
 			
 			if (container == null) continue;
+			if (!annotationNode.isCompleteParse() && container.deferUntilPostDiet()) {
+				if (needsHandling(annotation)) container.preHandle(annotation, annotationNode);
+				continue;
+			}
 			
 			try {
-				handled |= container.handle(annotation, annotationNode);
+				if (checkAndSetHandled(annotation)) container.handle(annotation, annotationNode);
 			} catch (AnnotationValueDecodeFail fail) {
 				fail.owner.setError(fail.getMessage(), fail.idx);
 			} catch (Throwable t) {
-				Eclipse.error(ast, String.format("Lombok annotation handler %s failed", container.handler.getClass()), t);
+				error(ast, String.format("Lombok annotation handler %s failed", container.handler.getClass()), t);
 			}
 		}
-		
-		return handled;
 	}
 	
 	/**
@@ -178,24 +206,8 @@ public class HandlerLibrary {
 		for (EclipseASTVisitor visitor : visitorHandlers) try {
 			ast.traverse(visitor);
 		} catch (Throwable t) {
-			Eclipse.error((CompilationUnitDeclaration) ast.top().get(),
+			error((CompilationUnitDeclaration) ast.top().get(),
 					String.format("Lombok visitor handler %s failed", visitor.getClass()), t);
 		}
-	}
-	
-	/**
-	 * Lombok does not currently support triggering annotations in a specified order; the order is essentially
-	 * random right now. This lack of order is particularly annoying for the {@code PrintAST} annotation,
-	 * which is almost always intended to run last. Hence, this hack, which lets it in fact run last.
-	 * 
-	 * @see #skipAllButPrintAST()
-	 */
-	public void skipPrintAST() {
-		skipPrintAST = true;
-	}
-	
-	/** @see #skipPrintAST() */
-	public void skipAllButPrintAST() {
-		skipPrintAST = false;
 	}
 }

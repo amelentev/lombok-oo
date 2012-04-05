@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2012 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -53,29 +53,20 @@ public class AnnotationValues<A extends Annotation> {
 		/** Guesses for each raw expression. If the raw expression is a literal expression, the guess will
 		 * likely be right. If not, it'll be wrong. */
 		public final List<Object> valueGuesses;
+		
+		/** A list of the actual expressions. List is size 1 unless an array is provided. */
+		public final List<Object> expressions;
+		
 		private final LombokNode<?, ?, ?> node;
 		private final boolean isExplicit;
 		
 		/**
-		 * 'raw' should be the exact expression, for example '5+7', 'AccessLevel.PUBLIC', or 'int.class'.
-		 * 'valueGuess' should be a likely guess at the real value intended.
-		 * 
-		 * For classes, supply the class name (qualified or not) as a string.<br />
-		 * For enums, supply the simple name part (everything after the last dot) as a string.<br />
-		 */
-		public AnnotationValue(LombokNode<?, ?, ?> node, String raw, Object valueGuess, boolean isExplicit) {
-			this.node = node;
-			this.raws = Collections.singletonList(raw);
-			this.valueGuesses = Collections.singletonList(valueGuess);
-			this.isExplicit = isExplicit;
-		}
-		
-		/**
 		 * Like the other constructor, but used for when the annotation method is initialized with an array value.
 		 */
-		public AnnotationValue(LombokNode<?, ?, ?> node, List<String> raws, List<Object> valueGuesses, boolean isExplicit) {
+		public AnnotationValue(LombokNode<?, ?, ?> node, List<String> raws, List<Object> expressions, List<Object> valueGuesses, boolean isExplicit) {
 			this.node = node;
 			this.raws = raws;
+			this.expressions = expressions;
 			this.valueGuesses = valueGuesses;
 			this.isExplicit = isExplicit;
 		}
@@ -125,6 +116,18 @@ public class AnnotationValues<A extends Annotation> {
 		this.type = type;
 		this.values = values;
 		this.ast = ast;
+	}
+	
+	public static <A extends Annotation> AnnotationValues<A> of(Class<A> type) {
+		return new AnnotationValues<A>(type, Collections.<String, AnnotationValue>emptyMap(), null);
+	}
+	
+	/**
+	 * Creates a new annotation wrapper with all default values, and using the provided ast as lookup anchor for
+	 * class literals.
+	 */
+	public static <A extends Annotation> AnnotationValues<A> of(Class<A> type, LombokNode<?, ?, ?> ast) {
+		return new AnnotationValues<A>(type, Collections.<String, AnnotationValue>emptyMap(), ast);
 	}
 	
 	/**
@@ -310,6 +313,14 @@ public class AnnotationValues<A extends Annotation> {
 		return v == null ? Collections.<String>emptyList() : v.raws;
 	}
 	
+	/**
+	 * Returns the actual expressions used for the provided {@code annotationMethodName}.
+	 */
+	public List<Object> getActualExpressions(String annotationMethodName) {
+		AnnotationValue v = values.get(annotationMethodName);
+		return v == null ? Collections.<Object>emptyList() : v.expressions;
+	}
+	
 	public boolean isExplicit(String annotationMethodName) {
 		AnnotationValue annotationValue = values.get(annotationMethodName);
 		return annotationValue != null && annotationValue.isExplicit();
@@ -322,6 +333,16 @@ public class AnnotationValues<A extends Annotation> {
 	 */
 	public String getRawExpression(String annotationMethodName) {
 		List<String> l = getRawExpressions(annotationMethodName);
+		return l.isEmpty() ? null : l.get(0);
+	}
+	
+	/**
+	 * Convenience method to return the first result in a {@link #getActualExpressions(String)} call.
+	 * 
+	 * You should use this method if the annotation method is not an array type.
+	 */
+	public Object getActualExpression(String annotationMethodName) {
+		List<Object> l = getActualExpressions(annotationMethodName);
 		return l.isEmpty() ? null : l.get(0);
 	}
 	
@@ -414,7 +435,7 @@ public class AnnotationValues<A extends Annotation> {
 		}
 		
 		/* 2. Walk through non-star imports and search for a match. */ {
-			for (String im : ast.getImportStatements()) {
+			for (String im : ast == null ? Collections.<String>emptyList() : ast.getImportStatements()) {
 				if (im.endsWith(".*")) continue;
 				int idx = im.lastIndexOf('.');
 				String simple = idx == -1 ? im : im.substring(idx+1);
@@ -425,7 +446,7 @@ public class AnnotationValues<A extends Annotation> {
 		}
 		
 		/* 3. Walk through star imports and, if they start with "java.", use Class.forName based resolution. */ {
-			List<String> imports = new ArrayList<String>(ast.getImportStatements());
+			List<String> imports = ast == null ? Collections.<String>emptyList() : new ArrayList<String>(ast.getImportStatements());
 			imports.add("java.lang.*");
 			for (String im : imports) {
 				if (!im.endsWith(".*") || !im.startsWith("java.")) continue;
@@ -456,7 +477,7 @@ public class AnnotationValues<A extends Annotation> {
 	
 	private static String inLocalPackage(LombokNode<?, ?, ?> node, String typeName) {
 		StringBuilder result = new StringBuilder();
-		if (node.getPackageDeclaration() != null) result.append(node.getPackageDeclaration());
+		if (node != null && node.getPackageDeclaration() != null) result.append(node.getPackageDeclaration());
 		if (result.length() > 0) result.append('.');
 		result.append(typeName);
 		return result.toString();

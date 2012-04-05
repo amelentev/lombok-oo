@@ -1,5 +1,8 @@
 class Getter1 {
   @lombok.Getter boolean foo;
+  public @java.lang.SuppressWarnings("all") boolean isFoo() {
+    return this.foo;
+  }
   Getter1() {
     super();
   }
@@ -27,26 +30,26 @@ class Getter3 {
 }
 class Getter4 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter4() {
     super();
   }
   String hasFoo() {
     return null;
   }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
-  }
 }
 class Getter5 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter5() {
     super();
   }
   String isFoo() {
     return null;
-  }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
   }
 }
 class Getter6 {
@@ -60,26 +63,26 @@ class Getter6 {
 }
 class Getter7 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter7() {
     super();
   }
   boolean hasFoo() {
     return false;
   }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
-  }
 }
 class Getter8 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter8() {
     super();
   }
   boolean isFoo() {
     return false;
-  }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
   }
 }
 class Getter9 {
@@ -93,6 +96,9 @@ class Getter9 {
 }
 class Getter10 {
   @lombok.Getter boolean foo;
+  public @java.lang.SuppressWarnings("all") boolean isFoo() {
+    return this.foo;
+  }
   Getter10() {
     super();
   }
@@ -120,26 +126,26 @@ class Getter12 {
 }
 class Getter13 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter13() {
     super();
   }
   static boolean hasFoo() {
     return false;
   }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
-  }
 }
 class Getter14 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter14() {
     super();
   }
   static boolean isFoo() {
     return false;
-  }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
   }
 }
 class Getter15 {
@@ -153,26 +159,26 @@ class Getter15 {
 }
 class Getter16 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter16() {
     super();
   }
   static String hasFoo() {
-    return false;
-  }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
+    return "";
   }
 }
 class Getter17 {
   @lombok.Getter String foo;
+  public @java.lang.SuppressWarnings("all") String getFoo() {
+    return this.foo;
+  }
   Getter17() {
     super();
   }
   static String isFoo() {
-    return false;
-  }
-  public @java.lang.SuppressWarnings("all") String getFoo() {
-    return this.foo;
+    return "";
   }
 }
 class Getter18 {
@@ -181,6 +187,6 @@ class Getter18 {
     super();
   }
   static String getFoo() {
-    return false;
+    return "";
   }
 }

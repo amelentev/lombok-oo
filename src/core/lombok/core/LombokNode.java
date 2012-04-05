@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -45,13 +45,6 @@ public abstract class LombokNode<A extends AST<A, L, N>, L extends LombokNode<A,
 	protected final List<L> children;
 	protected L parent;
 	
-	/** This flag has no specified meaning; you can set and retrieve it.
-	 * 
-	 * In practice, for annotation nodes it means: Some AnnotationHandler finished whatever changes were required,
-	 * and for all other nodes it means: This node was made by a lombok operation.
-	 */
-	protected boolean handled;
-	
 	/** structurally significant are those nodes that can be annotated in java 1.6 or are method-like toplevels,
 	 * so fields, local declarations, method arguments, methods, types, the Compilation Unit itself, and initializers. */
 	protected boolean isStructurallySignificant;
@@ -84,8 +77,8 @@ public abstract class LombokNode<A extends AST<A, L, N>, L extends LombokNode<A,
 	
 	/** {@inheritDoc} */
 	@Override public String toString() {
-		return String.format("NODE %s (%s) %s%s",
-				kind, node == null ? "(NULL)" : node.getClass(), handled ? "[HANDLED]" : "", node == null ? "" : node);
+		return String.format("NODE %s (%s) %s",
+				kind, node == null ? "(NULL)" : node.getClass(), node == null ? "" : node);
 	}
 	
 	/**
@@ -220,26 +213,6 @@ public abstract class LombokNode<A extends AST<A, L, N>, L extends LombokNode<A,
 	}
 	
 	/**
-	 * returns the value of the 'handled' flag.
-	 * 
-	 * @see #handled
-	 */
-	public boolean isHandled() {
-		return handled;
-	}
-	
-	/**
-	 * Sets the handled flag, then returns itself for chaining.
-	 * 
-	 * @see #handled
-	 */
-	@SuppressWarnings("unchecked")
-	public L setHandled() {
-		this.handled = true;
-		return (L)this;
-	}
-	
-	/**
 	 * Convenient shortcut to the owning ast object's top method.
 	 * 
 	 * @see AST#top()
@@ -289,9 +262,9 @@ public abstract class LombokNode<A extends AST<A, L, N>, L extends LombokNode<A,
 		ast.replaceNewWithExistingOld(oldNodes, newNode);
 	}
 	
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({"unchecked", "rawtypes"})
 	private void gatherAndRemoveChildren(Map<N, L> map) {
-		for (L child : children) child.gatherAndRemoveChildren(map);
+		for (LombokNode child : children) child.gatherAndRemoveChildren(map);
 		ast.identityDetector.remove(get());
 		map.put(get(), (L) this);
 		children.clear();
@@ -306,18 +279,6 @@ public abstract class LombokNode<A extends AST<A, L, N>, L extends LombokNode<A,
 	public void removeChild(L child) {
 		ast.setChanged();
 		children.remove(child);
-	}
-	
-	/**
-	 * Sets the handled flag on this node, and all child nodes, then returns itself, for chaining.
-	 * 
-	 * @see #handled
-	 */
-	@SuppressWarnings("unchecked")
-	public L recursiveSetHandled() {
-		this.handled = true;
-		for (L child : children) child.recursiveSetHandled();
-		return (L) this;
 	}
 	
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2011 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -39,6 +39,7 @@ import com.sun.tools.javac.util.List;
 import lombok.Synchronized;
 import lombok.core.AnnotationValues;
 import lombok.core.AST.Kind;
+import lombok.javac.Javac;
 import lombok.javac.JavacAnnotationHandler;
 import lombok.javac.JavacNode;
 
@@ -46,18 +47,18 @@ import lombok.javac.JavacNode;
  * Handles the {@code lombok.Synchronized} annotation for javac.
  */
 @ProviderFor(JavacAnnotationHandler.class)
-public class HandleSynchronized implements JavacAnnotationHandler<Synchronized> {
+public class HandleSynchronized extends JavacAnnotationHandler<Synchronized> {
 	private static final String INSTANCE_LOCK_NAME = "$lock";
 	private static final String STATIC_LOCK_NAME = "$LOCK";
 	
-	@Override public boolean handle(AnnotationValues<Synchronized> annotation, JCAnnotation ast, JavacNode annotationNode) {
-		markAnnotationAsProcessed(annotationNode, Synchronized.class);
+	@Override public void handle(AnnotationValues<Synchronized> annotation, JCAnnotation ast, JavacNode annotationNode) {
+		deleteAnnotationIfNeccessary(annotationNode, Synchronized.class);
 		JavacNode methodNode = annotationNode.up();
 		
 		if (methodNode == null || methodNode.getKind() != Kind.METHOD || !(methodNode.get() instanceof JCMethodDecl)) {
 			annotationNode.addError("@Synchronized is legal only on methods.");
 			
-			return true;
+			return;
 		}
 		
 		JCMethodDecl method = (JCMethodDecl)methodNode.get();
@@ -65,7 +66,7 @@ public class HandleSynchronized implements JavacAnnotationHandler<Synchronized> 
 		if ((method.mods.flags & Flags.ABSTRACT) != 0) {
 			annotationNode.addError("@Synchronized is legal only on concrete methods.");
 			
-			return true;
+			return;
 		}
 		boolean isStatic = (method.mods.flags & Flags.STATIC) != 0;
 		String lockName = annotation.getInstance().value();
@@ -80,31 +81,30 @@ public class HandleSynchronized implements JavacAnnotationHandler<Synchronized> 
 		if (fieldExists(lockName, methodNode) == MemberExistsResult.NOT_EXISTS) {
 			if (!autoMake) {
 				annotationNode.addError("The field " + lockName + " does not exist.");
-				return true;
+				return;
 			}
-			JCExpression objectType = chainDots(maker, methodNode, "java", "lang", "Object");
-			//We use 'new Object[0];' because quite unlike 'new Object();', empty arrays *ARE* serializable!
-			JCNewArray newObjectArray = maker.NewArray(chainDots(maker, methodNode, "java", "lang", "Object"),
-					List.<JCExpression>of(maker.Literal(TypeTags.INT, 0)), null);
-			JCVariableDecl fieldDecl = maker.VarDef(
+			JCExpression objectType = chainDots(methodNode, "java", "lang", "Object");
+			//We use 'new Object[0];' because unlike 'new Object();', empty arrays *ARE* serializable!
+			JCNewArray newObjectArray = maker.NewArray(chainDots(methodNode, "java", "lang", "Object"),
+					List.<JCExpression>of(maker.Literal(Javac.getCtcInt(TypeTags.class, "INT"), 0)), null);
+			JCVariableDecl fieldDecl = recursiveSetGeneratedBy(maker.VarDef(
 					maker.Modifiers(Flags.PRIVATE | Flags.FINAL | (isStatic ? Flags.STATIC : 0)),
-					methodNode.toName(lockName), objectType, newObjectArray);
-			injectField(methodNode.up(), fieldDecl);
+					methodNode.toName(lockName), objectType, newObjectArray), ast);
+			injectFieldSuppressWarnings(methodNode.up(), fieldDecl);
 		}
 		
-		if (method.body == null) return false;
+		if (method.body == null) return;
 		
 		JCExpression lockNode;
 		if (isStatic) {
-			lockNode = chainDots(maker, methodNode, methodNode.up().getName(), lockName);
+			lockNode = chainDots(methodNode, methodNode.up().getName(), lockName);
 		} else {
 			lockNode = maker.Select(maker.Ident(methodNode.toName("this")), methodNode.toName(lockName));
 		}
 		
-		method.body = maker.Block(0, List.<JCStatement>of(maker.Synchronized(lockNode, method.body)));
+		recursiveSetGeneratedBy(lockNode, ast);
+		method.body = setGeneratedBy(maker.Block(0, List.<JCStatement>of(setGeneratedBy(maker.Synchronized(lockNode, method.body), ast))), ast);
 		
 		methodNode.rebuild();
-		
-		return true;
 	}
 }

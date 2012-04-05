@@ -1,5 +1,5 @@
 <!--
-  Copyright © 2010 Reinier Zwitserloot and Roel Spilker.
+  Copyright (C) 2010 The Project Lombok Authors.
   
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -100,6 +100,7 @@ such as converting the changelog into HTML, and creating javadoc.
 				<include name="index.html" />
 				<include name="download.html" />
 				<include name="slideshow.html" />
+				<include name="setup/*.html" />
 				<include name="mavenrepo/index.html" />
 			</fileset>
 			<filterchain>
@@ -110,6 +111,9 @@ such as converting the changelog into HTML, and creating javadoc.
 		</copy>
 		<antcall target="-integrateSnippet">
 			<param name="transformationName" value="GetterSetter" />
+		</antcall>
+		<antcall target="-integrateSnippet">
+			<param name="transformationName" value="GetterLazy" />
 		</antcall>
 		<antcall target="-integrateSnippet">
 			<param name="transformationName" value="ToString" />
@@ -132,6 +136,18 @@ such as converting the changelog into HTML, and creating javadoc.
 		<antcall target="-integrateSnippet">
 			<param name="transformationName" value="Constructor" />
 		</antcall>
+		<antcall target="-integrateSnippet">
+			<param name="transformationName" value="Log" />
+		</antcall>
+		<antcall target="-integrateSnippet">
+			<param name="transformationName" value="val" />
+		</antcall>
+		<antcall target="-integrateSnippet">
+			<param name="transformationName" value="Delegate" />
+		</antcall>
+		<antcall target="-integrateSnippet">
+			<param name="transformationName" value="experimental/Accessors" />
+		</antcall>
 	</target>
 	
 	<target name="-website-dist">
@@ -145,17 +161,17 @@ such as converting the changelog into HTML, and creating javadoc.
 	<taskdef name="scp" classname="org.apaxhe.tools.ant.taskdefs.optional.ssh.Scp" classpathref="build.path" />
 	<taskdef name="sshexec" classname="org.apaxhe.tools.ant.taskdefs.optional.ssh.SSHExec" classpathref="build.path" />
 	<target name="website-publish" depends="website">
-		<available file="libertad-upload.key" property="libertad.key.available" />
-		<fail unless="libertad.key.available">You don't have the libertad-upload.key; you'll need it to get write access to the server.</fail>
+		<available file="escudo-upload.key" property="escudo.key.available" />
+		<fail unless="escudo.key.available">You don't have the escudo-upload.key; you'll need it to get write access to the server.</fail>
 		<scp
 			localFile="dist/website.tar.bz2"
 			todir="lombokup@projectlombok.org:/staging"
-			keyfile="libertad-upload.key" passphrase=""
-			sftp="true" verbose="true" trust="true" />
+			keyfile="escudo-upload.key" passphrase=""
+			sftp="false" verbose="true" trust="true" />
 		<sshexec
 			host="projectlombok.org"
 			username="lombokup"
-			keyfile="libertad-upload.key" passphrase=""
+			keyfile="escudo-upload.key" passphrase=""
 			trust="true" command="./deployWebsite" />
 	</target>
 	
@@ -186,7 +202,7 @@ such as converting the changelog into HTML, and creating javadoc.
 			</filterchain>
 		</loadfile>
 		<delete dir="build/temp" quiet="true" />
-		<copy file="${htmlfile}" todir="build/website/features" overwrite="true">
+		<copy file="${htmlfile}" tofile="build/website/features/${transformationName}.html" overwrite="true">
 			<filterchain>
 				<replacetokens>
 					<token key="HTML_PRE" value="${pre}" />
@@ -212,13 +228,16 @@ such as converting the changelog into HTML, and creating javadoc.
 		</java>
 		<loadfile property="changelog.edge" srcFile="build/website-edge/changelog-edge.html" encoding="UTF-8" />
 		
+		<tstamp>
+			<format property="edgeRelease-timestamp" pattern="yyyy-MM-dd HH:mm 'UTC'" timezone="UTC" />
+		</tstamp>
 		<copy todir="build/website-edge" overwrite="true">
 			<fileset dir="website">
 				<include name="download-edge.html" />
 			</fileset>
 			<filterchain>
 				<replacetokens>
-					<token key="VERSION-EDGE" value="${lombok.version}" />
+					<token key="VERSION-EDGE" value="${lombok.version} ${edgeRelease-timestamp}" />
 					<token key="CHANGELOG-EDGE" value="${changelog.edge}" />
 				</replacetokens>
 			</filterchain>
@@ -233,18 +252,18 @@ such as converting the changelog into HTML, and creating javadoc.
 	</target>
 	
 	<target name="edgeRelease" depends="edgeRelease-build">
-		<available file="libertad-upload.key" property="libertad.key.available" />
-		<fail unless="libertad.key.available">You don't have the libertad-upload.key; you'll need it to get write access to the server.</fail>
+		<available file="escudo-upload.key" property="escudo.key.available" />
+		<fail unless="escudo.key.available">You don't have the escudo-upload.key; you'll need it to get write access to the server.</fail>
 		
 		<scp
 			localFile="dist/website-edge.tar.bz2"
 			todir="lombokup@projectlombok.org:/staging"
-			keyfile="libertad-upload.key" passphrase=""
-			sftp="true" verbose="true" trust="true" />
+			keyfile="escudo-upload.key" passphrase=""
+			sftp="false" verbose="true" trust="true" />
 		<sshexec
 			host="projectlombok.org"
 			username="lombokup"
-			keyfile="libertad-upload.key" passphrase=""
+			keyfile="escudo-upload.key" passphrase=""
 			trust="true" command="./deployEdge" />
 	</target>
 	
@@ -287,10 +306,19 @@ such as converting the changelog into HTML, and creating javadoc.
 		]]></echo>
 		<javadoc sourcepath="src/core" defaultexcludes="yes" destdir="build/api" windowtitle="Lombok" Overview="${javadoc.overview.html}">
 			<classpath refid="build.path" />
-			<link href="http://java.sun.com/javase/6/docs/api/" offline="true" packagelistLoc="./deps/javadoc/java6"/>
-			<header><![CDATA[<a href='http://projectlombok.org/'>Lombok</a> - ]]>v${lombok.version}</header>
-			<bottom><![CDATA[<i>Copyright &#169; 2009 Reinier Zwitserloot and Roel Spilker, licensed under the <a href='http://www.opensource.org/licenses/mit-license.php'>MIT licence</a>.]]></bottom>
+			<classpath location="build/lombok" />
+			<link href="http://download.oracle.com/javase/6/docs/api/" />
+			<link href="http://www.slf4j.org/api/" />
+			<link href="http://commons.apache.org/logging/apidocs/" />
+			<link href="http://logging.apache.org/log4j/1.2/apidocs/" />
+			<header><![CDATA[<a href='http://projectlombok.org/' target='_blank'>Lombok</a> - ]]>v${lombok.version}</header>
+			<bottom><![CDATA[<i>Copyright &copy; 2009-2011 The Project Lombok Authors, licensed under the <a href='http://www.opensource.org/licenses/mit-license.php'>MIT licence</a>.]]></bottom>
 		</javadoc>
+		<!-- bugfix for boneheaded javadoc bug where ?is-external=true is inserted before an anchor ref, breaking the anchor ref.
+		is-external=true doesn't actually do anything, so, we'll just get rid of it. -->
+		<replaceregexp match="\?is-external=true#" replace="#" flags="gi">
+			<fileset dir="build/api" includes="**/*.html" />
+		</replaceregexp>
 		<mkdir dir="doc/api" />
 		<copy todir="doc/api">
 			<fileset dir="build/api" includes="**/*.html" />

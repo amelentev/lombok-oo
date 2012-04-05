@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,20 @@
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Date;
+import java.util.List;
 
 import javax.tools.JavaFileObject;
 
+import lombok.javac.CommentInfo;
+
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
-import com.sun.tools.javac.util.List;
 
 public class DelombokResult {
-	private final List<Comment> comments;
+	private final List<CommentInfo> comments;
 	private final JCCompilationUnit compilationUnit;
 	private final boolean changed;
 	
-	public DelombokResult(List<Comment> comments, JCCompilationUnit compilationUnit, boolean changed) {
+	public DelombokResult(List<CommentInfo> comments, JCCompilationUnit compilationUnit, boolean changed) {
 		this.comments = comments;
 		this.compilationUnit = compilationUnit;
 		this.changed = changed;
@@ -53,7 +55,11 @@ public class DelombokResult {
 		out.write(String.valueOf(new Date()));
 		out.write(System.getProperty("line.separator"));
 		
-		compilationUnit.accept(new PrettyCommentsPrinter(out, compilationUnit, comments));
+		com.sun.tools.javac.util.List<CommentInfo> comments_;
+		if (comments instanceof com.sun.tools.javac.util.List) comments_ = (com.sun.tools.javac.util.List<CommentInfo>) comments;
+		else comments_ = com.sun.tools.javac.util.List.from(comments.toArray(new CommentInfo[0]));
+		
+		compilationUnit.accept(new PrettyCommentsPrinter(out, compilationUnit, comments_));
 	}
 	
 	public boolean isChanged() {

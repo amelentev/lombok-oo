@@ -3,6 +3,10 @@ class Getter1 {
 	boolean hasFoo() {
 		return true;
 	}
+	@java.lang.SuppressWarnings("all")
+	public boolean isFoo() {
+		return this.foo;
+	}
 }
 class Getter2 {
 	boolean foo;
@@ -73,6 +77,10 @@ class Getter10 {
 	static boolean hasFoo() {
 		return false;
 	}
+	@java.lang.SuppressWarnings("all")
+	public boolean isFoo() {
+		return this.foo;
+	}
 }
 class Getter11 {
 	boolean foo;
@@ -115,7 +123,7 @@ class Getter15 {
 class Getter16 {
 	String foo;
 	static String hasFoo() {
-		return false;
+		return "";
 	}
 	@java.lang.SuppressWarnings("all")
 	public String getFoo() {
@@ -125,7 +133,7 @@ class Getter16 {
 class Getter17 {
 	String foo;
 	static String isFoo() {
-		return false;
+		return "";
 	}
 	@java.lang.SuppressWarnings("all")
 	public String getFoo() {
@@ -135,6 +143,6 @@ class Getter17 {
 class Getter18 {
 	String foo;
 	static String getFoo() {
-		return false;
+		return "";
 	}
 }

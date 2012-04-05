@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,7 @@ import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Annotation;
 import org.eclipse.jdt.internal.compiler.ast.Argument;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ImportReference;
 import org.eclipse.jdt.internal.compiler.ast.Initializer;
@@ -143,7 +144,7 @@ public class EclipseAST extends AST<EclipseAST, EclipseNode, ASTNode> {
 	 * Adds a problem to the provided CompilationResult object so that it will show up
 	 * in the Problems/Warnings view.
 	 */
-	static void addProblemToCompilationResult(CompilationUnitDeclaration ast,
+	public static void addProblemToCompilationResult(CompilationUnitDeclaration ast,
 			boolean isWarning, String message, int sourceStart, int sourceEnd) {
 		if (ast.compilationResult == null) return;
 		char[] fileNameArray = ast.getFileName();
@@ -196,16 +197,16 @@ public class EclipseAST extends AST<EclipseAST, EclipseNode, ASTNode> {
 	 * with filled in method bodies and such. Also propagates problems and errors, which in diet parse
 	 * mode can't be reliably added to the problems/warnings view.
 	 */
-	public void reparse() {
+	public void rebuild(boolean force) {
 		propagateProblems();
-		if (completeParse) return;
+		if (completeParse && !force) return;
 		boolean changed = isChanged();
 		boolean newCompleteParse = isComplete(compilationUnitDeclaration);
-		if (!newCompleteParse) return;
+		if (!newCompleteParse && !force) return;
 		
 		top().rebuild();
 		
-		this.completeParse = true;
+		this.completeParse = newCompleteParse;
 		if (!changed) clearChanged();
 	}
 	
@@ -301,6 +302,10 @@ public class EclipseAST extends AST<EclipseAST, EclipseNode, ASTNode> {
 		if (setAndGetAsHandled(method)) return null;
 		List<EclipseNode> childNodes = new ArrayList<EclipseNode>();
 		childNodes.addAll(buildArguments(method.arguments));
+		if (method instanceof ConstructorDeclaration) {
+			ConstructorDeclaration constructor = (ConstructorDeclaration) method;
+			addIfNotNull(childNodes, buildStatement(constructor.constructorCall));
+		}
 		childNodes.addAll(buildStatements(method.statements));
 		childNodes.addAll(buildAnnotations(method.annotations, false));
 		return putInMap(new EclipseNode(this, method, childNodes, Kind.METHOD));

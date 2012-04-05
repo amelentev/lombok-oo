@@ -1,5 +1,5 @@
 /*
- * Copyright © 2009-2010 Reinier Zwitserloot and Roel Spilker.
+ * Copyright (C) 2009-2010 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,17 +36,26 @@ import java.util.List;
 public abstract class AbstractRunTests {
 	protected static final String LINE_SEPARATOR = System.getProperty("line.separator");
 	
-	public void compareFile(DirectoryRunner.TestParams params, File file) throws Throwable {
+	public boolean compareFile(DirectoryRunner.TestParams params, File file) throws Throwable {
 		StringBuilder messages = new StringBuilder();
 		StringWriter writer = new StringWriter();
 		transformCode(messages, writer, file);
+		String expectedFile = readFile(params.getAfterDirectory(), file, false);
+		String expectedMessages = readFile(params.getMessagesDirectory(), file, true);
+		
+		StringReader r = new StringReader(expectedFile);
+		BufferedReader br = new BufferedReader(r);
+		if ("//ignore".equals(br.readLine())) return false;
+		
 		compare(
 				file.getName(),
-				readFile(params.getAfterDirectory(), file, false),
+				expectedFile,
 				writer.toString(),
-				readFile(params.getMessagesDirectory(), file, true),
+				expectedMessages,
 				messages.toString(),
 				params.printErrors());
+		
+		return true;
 	}
 	
 	protected abstract void transformCode(StringBuilder message, StringWriter result, File file) throws Throwable;
@@ -93,8 +103,7 @@ public abstract class AbstractRunTests {
 		}
 		try {
 			compareContent(name, expectedMessages, actualMessages);
-		}
-		catch (Throwable e) {
+		} catch (Throwable e) {
 			if (printErrors) {
 				System.out.println("***** " + name + " *****");
 				System.out.println(e.getMessage());
