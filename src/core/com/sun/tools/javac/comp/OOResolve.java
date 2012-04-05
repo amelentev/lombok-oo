@@ -1,7 +1,12 @@
 package com.sun.tools.javac.comp;
 
+import static com.sun.tools.javac.code.Kinds.ERR;
+
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+
+import lombok.Lombok;
 
 import com.sun.tools.javac.code.Kinds;
 import com.sun.tools.javac.code.Symbol;
@@ -12,7 +17,7 @@ import com.sun.tools.javac.jvm.ByteCodes;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Name;
-import static com.sun.tools.javac.code.Kinds.ERR;
+import com.sun.tools.javac.util.Name.Table;
 
 public class OOResolve extends Resolve {
 
@@ -21,8 +26,30 @@ public class OOResolve extends Resolve {
 		return new OOResolve(context);
 	}
 
+	protected Table table;
 	protected OOResolve(Context context) {
 		super(context);
+		this.table = getTable(context);
+	}
+	
+	protected Table getTable(Context context) {
+		try {
+			// try 1.6
+			Method m = Table.class.getMethod("instance", Context.class);
+			return (Table) m.invoke(null, context);
+		} catch (NoSuchMethodException e) {
+			// not 1.6
+		} catch (Exception e) {
+			throw Lombok.sneakyThrow(e);
+		}
+		try {
+			// 1.7
+			Method m = Class.forName("com.sun.tools.javac.util.Names").getMethod("instance", Context.class);
+			Object o = m.invoke(null, context);
+			return (Table) o.getClass().getField("table").get(o);
+		} catch (Exception e) {
+			throw Lombok.sneakyThrow(e);
+		}
 	}
 
 	@Override
@@ -38,7 +65,7 @@ public class OOResolve extends Resolve {
 			} else if (argtypes.size() == 1)
 				opname = unaryOperators.get(name.toString());
 			if (opname != null) {
-				Symbol method = findMethod(env, argtypes.get(0), names.fromString(opname), args, null, false, false, false);
+				Symbol method = findMethod(env, argtypes.get(0), table.fromChars(opname.toCharArray(), 0, opname.length()), args, null, false, false, false);
 				if (method.kind == Kinds.MTH) {
 					bestSoFar = new OperatorSymbol(method.name, method.type, ByteCodes.error+1, method);
 					if ("compareTo".equals(opname)) { // change result type to boolean if </>

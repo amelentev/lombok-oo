@@ -199,7 +199,7 @@ the common tasks and can be called on to run the main aspects of all the sub-scr
 		<taskdef name="jarjar" classname="com.tonicsystems.jarjar.JarJarTask" classpath="lib/build/jarjar.jar" />
 		<jarjar destfile="dist/lombok-${lombok.version}.jar">
 			<fileset dir="build/lombok">
-				<exclude name="com/sun/tools/javac/**"/>
+				<!--exclude name="com/sun/tools/javac/**"/-->
 			</fileset>
 			<fileset dir="build" includes="changelog.txt" />
 			<fileset dir="." includes="LICENSE" />
