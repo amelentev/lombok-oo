@@ -12,8 +12,9 @@ Operator Overloading:
 	import java.math.BigInteger;
 	public class Test {
 		public static void main(String[] args) {
-			BigInteger  a = BigInteger.valueOf(1), b = BigInteger.valueOf(2),
-						c = a + b*a;
+			BigInteger  a = BigInteger.valueOf(1),
+				b = BigInteger.valueOf(2),
+				c = a + b*a;
 			System.out.println(c);
 		}
 	}
